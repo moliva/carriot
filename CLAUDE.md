@@ -37,6 +37,15 @@ When given a ticket:
    - Layout: `sessions/<ticket>/cosmic-dolphin/`, `sessions/<ticket>/turbo-narwhal/`, etc.
 5. **Work in the worktrees** — all commits, pushes, and PRs happen there, never in `.base/`.
 
+## Adding a new repo
+
+Use the helper script — never clone manually:
+
+```sh
+bin/add-repo <org>/<repo>       # GitHub shorthand
+bin/add-repo <git-url>          # full SSH/HTTPS URL
+```
+
 ## Cleanup
 
 Session cleanup (removing worktrees and session dirs) is the user's responsibility. You may ask about it but should not remove them on your own.

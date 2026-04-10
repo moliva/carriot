@@ -65,8 +65,8 @@ Tears down a session and releases its resources:
 
 ## Adding a new repo
 
-To add a new repo to the hub:
-
 ```sh
-git clone --single-branch --filter=blob:none git@github.com:<org>/<repo>.git .base/<repo>
+bin/add-repo acme/cosmic-dolphin                              # GitHub shorthand
+bin/add-repo git@github.com:acme/cosmic-dolphin.git           # SSH URL
+bin/add-repo https://github.com/acme/cosmic-dolphin.git       # HTTPS URL
 ```

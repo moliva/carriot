@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CARRIOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+BASE_DIR="$CARRIOT_DIR/.base"
+
+usage() {
+  echo "Usage: add-repo <git-url | org/repo>"
+  echo
+  echo "Examples:"
+  echo "  add-repo acme/cosmic-dolphin"
+  echo "  add-repo git@github.com:acme/cosmic-dolphin.git"
+  echo "  add-repo https://github.com/acme/cosmic-dolphin.git"
+  exit 1
+}
+
+[[ $# -eq 1 ]] || usage
+
+input="$1"
+
+# Resolve input to a clone URL and extract the repo name.
+if [[ "$input" =~ ^git@|^https?://|^ssh:// ]]; then
+  url="$input"
+  name="$(basename "$url" .git)"
+else
+  # GitHub shorthand: org/repo
+  if [[ "$input" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+    url="git@github.com:${input}.git"
+    name="$(basename "$input")"
+  else
+    echo "error: unrecognised format — expected a git URL or org/repo" >&2
+    exit 1
+  fi
+fi
+
+dest="$BASE_DIR/$name"
+
+if [[ -d "$dest" ]]; then
+  echo "error: $dest already exists" >&2
+  exit 1
+fi
+
+echo "Cloning $url → .base/$name"
+git clone --single-branch --filter=blob:none "$url" "$dest"
+echo "Done — $name is ready for worktrees"
