@@ -1,0 +1,42 @@
+# Carriot — Worktree Hub
+
+A worktree management hub for Claude sessions working across multiple repositories simultaneously.
+
+## Structure
+
+- `.base/` — Single-branch clones of your GitHub repos, each checked out on its default branch. These are **reference clones only**:
+  - **Never make changes directly** in these repos.
+  - They exist solely as bases for `git worktree add`.
+- `sessions/` — Active working sessions, one per ticket.
+
+## Repo Scope
+
+Only use the clones in `.base/`. Do **not** reference or interact with repos outside of carriot — they are a separate concern.
+
+## Workflow
+
+When given a ticket:
+
+1. **Read the ticket** to understand the scope.
+2. **Diagnose which repos** need changes.
+3. **Create a session directory** named after the ticket:
+   ```
+   sessions/<TICKET-ID>/
+   ```
+   For example: `sessions/PROJ-42/`
+4. **For each repo needed:**
+   - Fetch latest into the clone:
+     ```sh
+     git -C .base/<repo> fetch origin
+     ```
+   - Detect the default branch (`main`, `master`, etc.) from the clone's checked-out branch.
+   - Create a worktree branching from the default branch:
+     ```sh
+     git -C .base/<repo> worktree add ~/carriot/sessions/<ticket>/<repo> -b <branch> origin/<default-branch>
+     ```
+   - Layout: `sessions/<ticket>/cosmic-dolphin/`, `sessions/<ticket>/turbo-narwhal/`, etc.
+5. **Work in the worktrees** — all commits, pushes, and PRs happen there, never in `.base/`.
+
+## Cleanup
+
+Session cleanup (removing worktrees and session dirs) is the user's responsibility. You may ask about it but should not remove them on your own.
