@@ -7,7 +7,7 @@ A worktree management hub for Claude sessions working across multiple repositori
 - `.base/` — Single-branch clones of your GitHub repos, each checked out on its default branch. These are **reference clones only**:
   - **Never make changes directly** in these repos.
   - They exist solely as bases for `git worktree add`.
-- `sessions/` — Active working sessions, one per ticket.
+- `sessions/` — Active working sessions (ticket-based or review sessions).
 
 ## Repo Scope
 
@@ -43,6 +43,30 @@ When given a ticket:
 6. **Work in the worktrees** — all commits, pushes, and PRs happen there, never in `.base/`.
 7. **Switch working directory** to the session worktree after creation (e.g., `sessions/PROJ-42/cosmic-dolphin/`).
 
+## Review Sessions
+
+Lightweight, ephemeral sessions for reviewing a PR or branch. No ticket required.
+
+When given a PR URL or branch to review:
+
+1. **Parse the PR** — extract the repo, PR number, and branch name. Use `gh pr view` if needed.
+2. **Ensure the repo exists** in `.base/`. If not, add it with `bin/add-repo`.
+3. **Create the session directory:**
+   ```
+   sessions/review-<repo>#<pr-number>/
+   ```
+   For example: `sessions/review-cosmic-dolphin#1234/`
+4. **Fetch and create a worktree** on the PR branch (do **not** create a new branch — check out the existing one):
+   ```sh
+   git -C .base/<repo> fetch origin
+   git -C .base/<repo> worktree add "$(git rev-parse --show-toplevel)/sessions/review-<repo>#<pr>/<repo>" <remote-branch>
+   ```
+5. **Switch working directory** to the worktree.
+6. **Review** using `/review-pr` and discuss findings with the user.
+7. **Post comments / approve** as directed.
+8. **Offer teardown** — since review sessions are one-time use, proactively offer to remove the worktree and session directory once the review is done.
+9. If the PR references changes needed in **another repo** (and a specific non-default branch), set up an additional worktree in the same session directory for that repo.
+
 ## Adding a new repo
 
 Use the helper script — never clone manually:
@@ -52,6 +76,13 @@ bin/add-repo <org>/<repo>       # GitHub shorthand
 bin/add-repo <git-url>          # full SSH/HTTPS URL
 ```
 
+## Tmux
+
+When asked to split a pane, always use `$PWD` so it opens in the current working directory:
+
+- **Vertical split (side-by-side):** `tmux split-window -h -c "$PWD"`
+- **Horizontal split (top/bottom):** `tmux split-window -v -c "$PWD"`
+
 ## Cleanup
 
-Session cleanup (removing worktrees and session dirs) is the user's responsibility. You may ask about it but should not remove them on your own. After teardown, switch the working directory back to the carriot root.
+Session cleanup (removing worktrees and session dirs) is the user's responsibility. You may ask about it but should not remove them on your own. **Exception:** for review sessions, proactively offer to clean up since they are ephemeral by nature. After teardown, switch the working directory back to the carriot root.
