@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CARRIOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+BASE_DIR="$CARRIOT_DIR/.base"
+SESSIONS_DIR="$CARRIOT_DIR/sessions"
+
+usage() {
+  cat <<EOF
+Usage: review <pr-url>
+       review <repo>#<number>
+       review <repo> <branch>
+
+Creates a review session worktree:
+  sessions/review-<repo>#<number>/<repo>/   (PR-based)
+  sessions/review-<repo>-<branch>/<repo>/   (branch-only)
+
+Requires the repo to already exist in .base/ (run: bin/add-repo first).
+
+Examples:
+  review https://github.com/acme/backend/pull/22177
+  review backend#22177
+  review backend some-reviewers-branch
+EOF
+  exit 1
+}
+
+[[ $# -ge 1 && $# -le 2 ]] || usage
+
+repo=""
+branch=""
+pr_number=""
+org=""
+
+if [[ $# -eq 2 ]]; then
+  repo="$1"
+  branch="$2"
+elif [[ "$1" =~ ^https?://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)/?$ ]]; then
+  org="${BASH_REMATCH[1]}"
+  repo="${BASH_REMATCH[2]}"
+  pr_number="${BASH_REMATCH[3]}"
+elif [[ "$1" =~ ^([A-Za-z0-9._-]+)#([0-9]+)$ ]]; then
+  repo="${BASH_REMATCH[1]}"
+  pr_number="${BASH_REMATCH[2]}"
+else
+  echo "error: unrecognised arg: $1" >&2
+  usage
+fi
+
+base="$BASE_DIR/$repo"
+if [[ ! -d "$base" ]]; then
+  echo "error: no base clone at $base" >&2
+  echo "  run: bin/add-repo <org>/$repo" >&2
+  exit 1
+fi
+
+# Derive org from the base clone's origin if not already parsed from a URL.
+if [[ -z "$org" ]]; then
+  remote_url="$(git -C "$base" remote get-url origin)"
+  if [[ "$remote_url" =~ github\.com[:/]([^/]+)/ ]]; then
+    org="${BASH_REMATCH[1]}"
+  else
+    echo "error: could not derive GitHub org from $remote_url" >&2
+    exit 1
+  fi
+fi
+
+# Resolve branch from PR number if needed.
+if [[ -n "$pr_number" ]]; then
+  echo "Looking up $org/$repo PR #$pr_number..."
+  branch="$(gh pr view "$pr_number" --repo "$org/$repo" --json headRefName --jq '.headRefName')"
+  [[ -n "$branch" ]] || { echo "error: could not resolve branch for PR #$pr_number" >&2; exit 1; }
+fi
+
+# Session directory name.
+if [[ -n "$pr_number" ]]; then
+  session="review-$repo#$pr_number"
+else
+  session="review-$repo-${branch//\//-}"
+fi
+session_dir="$SESSIONS_DIR/$session"
+worktree_dir="$session_dir/$repo"
+
+if [[ -d "$session_dir" ]]; then
+  echo "error: session dir already exists: $session_dir" >&2
+  echo "  run: bin/teardown '$session'" >&2
+  exit 1
+fi
+
+echo "Fetching $branch from origin..."
+git -C "$base" fetch origin "$branch:refs/remotes/origin/$branch"
+
+# Pick a local branch name that doesn't collide with an existing one in the base clone.
+local_branch="$branch"
+i=2
+while git -C "$base" show-ref --verify --quiet "refs/heads/$local_branch"; do
+  local_branch="${branch}-r${i}"
+  i=$((i+1))
+done
+
+mkdir -p "$session_dir"
+echo "Creating worktree at $worktree_dir (branch: $local_branch)"
+git -C "$base" worktree add "$worktree_dir" -b "$local_branch" "origin/$branch"
+
+echo
+echo "Session ready: $session"
+echo "  cd '$worktree_dir'"

@@ -6,59 +6,50 @@ argument-hint: "<TICKET-ID>"
 
 # Teardown
 
-Remove worktrees and clean up a session's resources.
+Tear down a session using the `bin/teardown` helper. Do **not** hand-roll `git worktree remove` + `rmdir` — the script already handles safety checks, branch cleanup, and `.notes/` removal.
 
 ## Step 1 — Identify the session
 
-If `$ARGUMENTS` is provided, use it as the ticket ID. Otherwise, list active sessions and ask the user which one to tear down:
+If `$ARGUMENTS` is provided, use it as the session name. Otherwise, list active sessions and ask the user which one to tear down:
 
 ```bash
 ls ~/carriot/sessions/
 ```
 
-## Step 2 — Check for uncommitted work
+## Step 2 — Run the script
 
-For each worktree in the session, check for unsaved changes:
-
-```bash
-for repo in ~/carriot/sessions/<TICKET-ID>/*/; do
-  echo "=== $(basename $repo) ==="
-  git -C "$repo" status --short
-  git -C "$repo" log --oneline origin/HEAD..HEAD 2>/dev/null || git -C "$repo" log --oneline -3
-done
-```
-
-If there are uncommitted changes or unpushed commits, **stop and warn the user**. List exactly what would be lost and ask for explicit confirmation before proceeding.
-
-## Step 3 — Remove worktrees
-
-For each repo in the session, remove the worktree through the reference clone:
+From the carriot root:
 
 ```bash
-git -C ~/carriot/.base/<repo> worktree remove ~/carriot/sessions/<TICKET-ID>/<repo>
+bin/teardown '<session>'          # quote session names that contain '#' (review sessions)
 ```
 
-If a worktree removal fails (e.g., dirty tree), report the error and ask the user how to proceed. Use `--force` only if the user explicitly approves.
+The script refuses if any worktree has uncommitted changes or commits not reachable from a remote. In that case, **stop and show the user what would be lost** before re-running with `-f`.
 
-## Step 4 — Clean up session directory
+### When `-f` is appropriate
 
-Remove the now-empty session directory:
+- **Review sessions:** the PR commit is fetched into a local ref (e.g. `pr-<N>-head`) which the script flags as "not on any remote" even though the commit exists upstream at `pull/<N>/head`. `-f` is the right call.
+- **User explicitly confirms** the flagged work is disposable.
+
+Never pass `-f` without either of the above.
 
 ```bash
-rmdir ~/carriot/sessions/<TICKET-ID>
+bin/teardown -f '<session>'
 ```
 
-If the directory is not empty (unexpected leftover files), list them and ask before removing.
-
-## Step 5 — Report
+## Step 3 — Report
 
 Confirm to the user:
-- Which worktrees were removed
-- Which branches still exist on the remote (they are not deleted)
-- That the session is fully cleaned up
-
-After cleanup, ask the user if they also want to delete the remote branches. Only prune them with explicit confirmation:
+- Which worktrees were removed (from script output)
+- That the session directory is gone
+- Remote branches still exist — ask if they want them deleted:
 
 ```bash
 git -C ~/carriot/.base/<repo> push origin --delete <branch-name>
 ```
+
+Only prune remote branches with explicit confirmation.
+
+## Step 4 — Return to carriot root
+
+After teardown, `cd` back to the carriot root so subsequent commands don't run in a non-existent directory.

@@ -83,6 +83,21 @@ When asked to split a pane, always use `$PWD` so it opens in the current working
 - **Vertical split (side-by-side):** `tmux split-window -h -c "$PWD"`
 - **Horizontal split (top/bottom):** `tmux split-window -v -c "$PWD"`
 
+### Session description (window name)
+
+When you start working on something — a new ticket, a review session, or any standalone request that introduces fresh work — rename the tmux window to a 1–3 word description of the work:
+
+```sh
+tmux rename-window '<desc>'
+```
+
+The statusline picks up the window name and surfaces it in dim yellow as the session description.
+
+- Keep it **expressive and human-readable**, not a ticket ID — e.g. `auth-refactor`, `flaky tests`, `helm rightsize`, `pr review`. Skip articles and filler words.
+- Don't rename for tiny follow-ups inside the same task.
+- If unsure what to call it, pick the best label you can from the user's request — don't ask.
+- The statusline filters common defaults (`main`, `master`, `zsh`, `bash`, `claude`, `node`), so nothing extra shows until you set a description.
+
 ## Cleanup
 
 Session cleanup (removing worktrees and session dirs) is the user's responsibility. You may ask about it but should not remove them on your own. **Exception:** for review sessions, proactively offer to clean up since they are ephemeral by nature. After teardown, switch the working directory back to the carriot root.

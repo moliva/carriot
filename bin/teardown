@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CARRIOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+BASE_DIR="$CARRIOT_DIR/.base"
+SESSIONS_DIR="$CARRIOT_DIR/sessions"
+
+force=0
+session=""
+
+usage() {
+  echo "Usage: teardown [-f|--force] <session>"
+  echo
+  echo "Removes all worktrees and the session directory for <session>."
+  echo "Safety checks (skipped with -f):"
+  echo "  - Refuses if any worktree has uncommitted changes."
+  echo "  - Refuses if any worktree has commits not reachable from a remote ref."
+  echo
+  echo "Examples:"
+  echo "  teardown BEPLAT-3972"
+  echo "  teardown 'review-backend#22177'"
+  echo "  teardown -f my-abandoned-session"
+  exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -f|--force) force=1 ;;
+    -h|--help)  usage ;;
+    -*)         echo "error: unknown flag $1" >&2; usage ;;
+    *)          [[ -z "$session" ]] || usage; session="$1" ;;
+  esac
+  shift
+done
+
+[[ -n "$session" ]] || usage
+
+session_dir="$SESSIONS_DIR/$session"
+
+if [[ ! -d "$session_dir" ]]; then
+  echo "error: no such session: $session_dir" >&2
+  exit 1
+fi
+
+# Collect repo worktrees (immediate subdirectories that look like git worktrees).
+repos=()
+while IFS= read -r -d '' dir; do
+  [[ -e "$dir/.git" ]] && repos+=("$dir")
+done < <(find "$session_dir" -mindepth 1 -maxdepth 1 -type d -print0)
+
+if [[ ${#repos[@]} -eq 0 ]]; then
+  echo "No worktrees found under $session_dir — removing session dir."
+  rm -rf "$session_dir"
+  exit 0
+fi
+
+# Safety pass (skipped with -f).
+if [[ $force -eq 0 ]]; then
+  unsafe=0
+  for repo in "${repos[@]}"; do
+    name="$(basename "$repo")"
+    if [[ -n "$(git -C "$repo" status --porcelain)" ]]; then
+      echo "  ✗ $name: uncommitted changes"
+      git -C "$repo" status --short | sed 's/^/      /'
+      unsafe=1
+    fi
+    # Commits on HEAD not reachable from any remote-tracking ref.
+    unpushed="$(git -C "$repo" log --oneline --branches --not --remotes 2>/dev/null | grep -F "$(git -C "$repo" rev-parse --short HEAD)" || true)"
+    if [[ -n "$unpushed" ]]; then
+      # Only flag commits actually on the current branch.
+      head_unpushed="$(git -C "$repo" log --oneline @{upstream}..HEAD 2>/dev/null || true)"
+      if [[ -z "$head_unpushed" ]]; then
+        # No upstream — check against all remotes.
+        head_unpushed="$(git -C "$repo" log --oneline HEAD --not --remotes 2>/dev/null || true)"
+      fi
+      if [[ -n "$head_unpushed" ]]; then
+        echo "  ✗ $name: commits not on any remote"
+        echo "$head_unpushed" | sed 's/^/      /'
+        unsafe=1
+      fi
+    fi
+  done
+  if [[ $unsafe -eq 1 ]]; then
+    echo
+    echo "Refusing to tear down. Commit/push your work, or re-run with -f to discard." >&2
+    exit 1
+  fi
+fi
+
+# Remove worktrees through their base clones; delete the local branch.
+for repo in "${repos[@]}"; do
+  name="$(basename "$repo")"
+  base="$BASE_DIR/$name"
+  if [[ ! -d "$base" ]]; then
+    echo "warn: no base clone at $base — leaving $repo in place" >&2
+    continue
+  fi
+  branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+  remove_flags=()
+  [[ $force -eq 1 ]] && remove_flags+=(--force)
+  echo "Removing worktree: $repo"
+  git -C "$base" worktree remove "${remove_flags[@]}" "$repo"
+  # Delete the local branch iff the worktree owned it (skip detached HEAD).
+  if [[ -n "$branch" && "$branch" != "HEAD" ]]; then
+    # Only delete if the branch still exists (worktree remove keeps it).
+    if git -C "$base" show-ref --verify --quiet "refs/heads/$branch"; then
+      echo "Deleting local branch: $branch"
+      git -C "$base" branch -D "$branch" >/dev/null
+    fi
+  fi
+done
+
+# Session dir may still contain .notes/ or similar — nuke it.
+rm -rf "$session_dir"
+echo "Session $session torn down."
