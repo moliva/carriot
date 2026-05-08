@@ -99,7 +99,7 @@ for repo in "${repos[@]}"; do
   remove_flags=()
   [[ $force -eq 1 ]] && remove_flags+=(--force)
   echo "Removing worktree: $repo"
-  git -C "$base" worktree remove "${remove_flags[@]}" "$repo"
+  git -C "$base" worktree remove ${remove_flags[@]+"${remove_flags[@]}"} "$repo"
   # Delete the local branch iff the worktree owned it (skip detached HEAD).
   if [[ -n "$branch" && "$branch" != "HEAD" ]]; then
     # Only delete if the branch still exists (worktree remove keeps it).

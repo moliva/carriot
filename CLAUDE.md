@@ -78,18 +78,22 @@ bin/add-repo <git-url>          # full SSH/HTTPS URL
 
 ## Tmux
 
-When asked to split a pane, always use `$PWD` so it opens in the current working directory:
+**Always target your own pane via `$TMUX_PANE`.** Tmux sets this env var per-pane; it identifies the pane Claude is running in. Without `-t "$TMUX_PANE"`, tmux commands act on whichever pane/window the user is currently viewing — which is usually *not* Claude's pane, so renames and splits land on the wrong window.
 
-- **Vertical split (side-by-side):** `tmux split-window -h -c "$PWD"`
-- **Horizontal split (top/bottom):** `tmux split-window -v -c "$PWD"`
+When asked to split a pane, always use `$PWD` so it opens in the current working directory, and target your own pane:
+
+- **Vertical split (side-by-side):** `tmux split-window -h -t "$TMUX_PANE" -c "$PWD"`
+- **Horizontal split (top/bottom):** `tmux split-window -v -t "$TMUX_PANE" -c "$PWD"`
 
 ### Session description (window name)
 
-When you start working on something — a new ticket, a review session, or any standalone request that introduces fresh work — rename the tmux window to a 1–3 word description of the work:
+When you start working on something — a new ticket, a review session, or any standalone request that introduces fresh work — rename **your own** tmux window to a 1–3 word description of the work:
 
 ```sh
-tmux rename-window '<desc>'
+tmux rename-window -t "$TMUX_PANE" '<desc>'
 ```
+
+The `-t "$TMUX_PANE"` is required — tmux resolves the pane id to its containing window, so the rename always lands on Claude's window even if the user is viewing another window. Without it, a stray rename will silently retitle whatever window the user happens to be on.
 
 The statusline picks up the window name and surfaces it in dim yellow as the session description.
 
@@ -97,6 +101,7 @@ The statusline picks up the window name and surfaces it in dim yellow as the ses
 - Don't rename for tiny follow-ups inside the same task.
 - If unsure what to call it, pick the best label you can from the user's request — don't ask.
 - The statusline filters common defaults (`main`, `master`, `zsh`, `bash`, `claude`, `node`), so nothing extra shows until you set a description.
+- If `$TMUX_PANE` is unset (Claude isn't running under tmux), skip the rename silently.
 
 ## Cleanup
 
