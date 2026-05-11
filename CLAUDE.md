@@ -97,7 +97,8 @@ The `-t "$TMUX_PANE"` is required — tmux resolves the pane id to its containin
 
 The statusline picks up the window name and surfaces it in dim yellow as the session description.
 
-- Keep it **expressive and human-readable**, not a ticket ID — e.g. `auth-refactor`, `flaky tests`, `helm rightsize`, `pr review`. Skip articles and filler words.
+- Keep it **expressive and human-readable**, not a ticket ID — e.g. `auth-refactor`, `flaky-tests`, `helm-rightsize`, `pr-review`. Skip articles and filler words.
+- **Use hyphens, not spaces**, to separate words — hyphens render more cleanly in the statusline.
 - Don't rename for tiny follow-ups inside the same task.
 - If unsure what to call it, pick the best label you can from the user's request — don't ask.
 - The statusline filters common defaults (`main`, `master`, `zsh`, `bash`, `claude`, `node`), so nothing extra shows until you set a description.
