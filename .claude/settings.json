@@ -2,7 +2,7 @@
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
-    "excludedCommands": ["git", "gh"],
+    "excludedCommands": ["git", "gh", "tmux"],
     "filesystem": {
       "allowWrite": ["/tmp"]
     },
