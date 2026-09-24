@@ -1,10 +1,73 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(yarn:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(bun:*)",
+      "Bash(just:*)",
+      "Bash(cargo:*)",
+      "Bash(tmux capture-pane *)",
+      "Bash(tmux rename-window *)",
+      "mcp__datadog__get_datadog_metric",
+      "mcp__claude_ai_Notion__notion-fetch",
+      "mcp__linear__get_issue",
+      "mcp__claude_ai_Notion__notion-query-data-sources",
+      "mcp__linear__list_issues",
+      "mcp__datadog__analyze_datadog_logs",
+      "mcp__claude_ai_Slack__slack_read_user_profile",
+      "mcp__linear__list_projects",
+      "mcp__linear__list_users",
+      "mcp__datadog__search_datadog_logs",
+      "mcp__linear__list_comments",
+      "mcp__datadog__search_datadog_metrics",
+      "mcp__datadog__search_datadog_events",
+      "mcp__datadog__search_datadog_monitors",
+      "mcp__datadog__aggregate_spans",
+      "mcp__claude_ai_Slack__slack_search_users",
+      "mcp__linear__get_status_updates",
+      "mcp__datadog__search_datadog_spans",
+      "mcp__linear__get_project",
+      "mcp__datadog__get_datadog_metric_context",
+      "mcp__linear__save_issue",
+      "mcp__linear__save_comment",
+      "mcp__claude_ai_Notion__notion-get-users",
+      "mcp__claude_ai_Notion__notion-search",
+      "mcp__claude_ai_Slack__slack_search_public",
+      "mcp__claude_ai_Slack__slack_search_channels",
+      "mcp__claude_ai_Slack__slack_read_thread",
+      "mcp__claude_ai_Slack__slack_read_channel",
+      "mcp__claude_ai_Linear__list_teams",
+      "mcp__linear__list_issue_statuses",
+      "mcp__pagerduty__get_service",
+      "mcp__datadog__get_datadog_dashboard",
+      "mcp__datadog__load_datadog_skill",
+      "mcp__datadog__list_datadog_skills",
+      "mcp__gateway-incident-io__follow_up_list",
+      "mcp__gateway-incident-io__schedule_list",
+      "Bash(source /Users/moliva/.claude/skills/pr-comments/pr-comments.sh)",
+      "mcp__gateway-datadog__get_datadog_metric",
+      "mcp__gateway-datadog__search_datadog_monitors",
+      "mcp__gateway-datadog__search_datadog_events",
+      "mcp__gateway-datadog__list_datadog_skills",
+      "mcp__gateway-datadog__get_datadog_metric_context",
+      "mcp__gateway-datadog__load_datadog_skill",
+      "mcp__gateway-datadog__search_datadog_dashboards",
+      "mcp__gateway-datadog__search_datadog_metrics",
+      "mcp__linear__get_user",
+      "mcp__claude_ai_Slack__slack_search_public_and_private"
+    ]
+  },
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
-    "excludedCommands": ["git", "gh", "tmux"],
+    "excludedCommands": ["git", "gh", "tmux", "gpg", "gpgconf", "gpg-agent", "gpg-connect-agent", "yarn", "npm", "npx", "bun", "just", "cargo", "pham", "aws"],
     "filesystem": {
-      "allowWrite": ["/tmp"]
+      "allowWrite": ["/tmp", "~/.gnupg", "~/.pham", "/Users/moliva/carriot/sessions", "/Users/moliva/carriot/.base"],
+      "allowRead": ["~/.ssh/known_hosts"]
     },
     "network": {
       "allowedDomains": [
@@ -20,7 +83,14 @@
         "docs.anthropic.com",
         "registry.npmjs.org",
         "*.npmjs.org",
-        "registry.yarnpkg.com"
+        "registry.yarnpkg.com",
+        "registry.tools.phantom.dev",
+        "artifactory.tools.phantom.dev",
+        "*.tools.phantom.dev",
+        "graph.codex.io",
+        "crates.io",
+        "static.crates.io",
+        "index.crates.io"
       ]
     }
   }
