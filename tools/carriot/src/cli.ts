@@ -6,19 +6,20 @@ import { adapt as claude } from "./adapters/claude";
 import * as core from "./core";
 import * as db from "./db";
 import * as tmux from "./tmux";
-import { BLOCKED, label, type SessionRow, type State } from "./types";
+import { BLOCKED, isStale, label, type SessionRow, type State } from "./types";
 
 const ADAPTERS: Record<string, (payload: any) => ReturnType<typeof claude>> = { claude };
 
 const C = { red: "\x1b[31m", yellow: "\x1b[33m", green: "\x1b[32m", blue: "\x1b[34m", dim: "\x1b[2m", bold: "\x1b[1m", reset: "\x1b[0m" };
 const color = (s: SessionRow) =>
-  BLOCKED.includes(s.state) ? C.red : s.state === "waiting" ? C.yellow : s.mode === "plan" ? C.blue : C.green;
+  isStale(s) ? C.dim : BLOCKED.includes(s.state) ? C.red : s.state === "waiting" ? C.yellow : s.mode === "plan" ? C.blue : C.green;
 
 const self = () => `${process.env.CARRIOT_BIN ?? "carriot"}`;
 
 const CHEATSHEET = (c: typeof C) => `${c.bold}CARRIOT CHEATSHEET${c.reset}  ${c.dim}one chariot, many horses: see who is pulling and who is waiting on you${c.reset}
 
 ${c.red}●${c.reset} needs you   ${c.yellow}●${c.reset} your turn   ${c.blue}●${c.reset} planning   ${c.green}●${c.reset} working
+idle: no activity for a day (CARRIOT_STALE_AFTER_HOURS); grouped last, grey ○ in tmux; prefix b reaches them only when nothing active waits
 ⏸ parked (hidden tmux session)   ◌ bg (claude --bg, detached)   ◉ bg (attached in a window)
 enter / jump reconnects anything: parked sessions come back, background ones open a \`claude attach\` window
 
@@ -38,7 +39,9 @@ ${c.bold}WEZTERM${c.reset}  ${c.dim}(no prefix needed)${c.reset}
   cmd+shift+w       close the current agent   cmd+/         this cheatsheet
 
 ${c.bold}REINS${c.reset}  ${c.dim}carriot reins${c.reset}
-  j k  ↑ ↓          move between sessions        g G   first / last
+  j k  ↑ ↓  ^n ^p   move between sessions        g G   first / last
+  /                 fuzzy find (type to narrow, enter jumps, esc clears)
+  s                 sort: longest waiting first / most recent first
   enter             jump to the session's pane   n     jump to next waiting
   1 2 3 4  tab      overview / plan / PR preview / terminal
   J K  ^d ^u  space scroll the right-hand pane
@@ -161,7 +164,7 @@ function row(s: SessionRow, width = 40): string {
   const pad = 28 - Bun.stringWidth(name.replace(/\x1b\[[0-9;]*m/g, ""));
   const padded = `${name}${" ".repeat(Math.max(0, pad))}`;
   const st = label(s).padEnd(14);
-  const age = core.ago(s.state_since).padStart(4);
+  const age = core.ago(isStale(s) ? s.updated_at : s.state_since).padStart(4);
   const detail = (s.detail ?? "").replace(/\s+/g, " ").slice(0, width);
   return `${color(s)}●${C.reset} ${C.bold}${padded}${C.reset} ${color(s)}${st}${C.reset} ${C.dim}${age}${C.reset}  ${detail}`;
 }

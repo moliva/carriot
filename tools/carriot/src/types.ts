@@ -111,3 +111,8 @@ export function label(row: Pick<SessionRow, "state" | "mode">): string {
       return "ended";
   }
 }
+
+/** No hook activity (prompt, tool call, reply) for this long moves a session to the idle group. */
+export const STALE_AFTER_MS = Number(process.env.CARRIOT_STALE_AFTER_HOURS ?? 24) * 3600_000;
+
+export const isStale = (s: Pick<SessionRow, "updated_at">, now = Date.now()) => now - s.updated_at > STALE_AFTER_MS;

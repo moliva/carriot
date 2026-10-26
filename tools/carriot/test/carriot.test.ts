@@ -10,6 +10,8 @@ const { adapt } = await import("../src/adapters/claude");
 const { flag, isPrCreate } = await import("../src/pr");
 const db = await import("../src/db");
 const core = await import("../src/core");
+const { fuzzyScore } = await import("../src/fuzzy");
+const { isStale, STALE_AFTER_MS } = await import("../src/types");
 
 const env = { TMUX_PANE: undefined };
 const ev = (h: Record<string, unknown>) => adapt({ session_id: "s1", cwd: dir, permission_mode: "default", ...h }, env);
@@ -187,5 +189,71 @@ describe("background sessions", () => {
     db.apply({ agent: "claude", sessionId: "bg-d", state: "working", background: true });
     core.syncBackground(null);
     expect(db.getSession("bg-d")?.state).toBe("working");
+  });
+});
+
+describe("fuzzy find", () => {
+  test("letters must appear in order", () => {
+    expect(fuzzyScore("hlm", "helm-rightsize your turn")).not.toBeNull();
+    expect(fuzzyScore("mlh", "helm-rightsize")).toBeNull();
+  });
+
+  test("every space-separated term must match", () => {
+    expect(fuzzyScore("helm turn", "helm-rightsize your turn")).not.toBeNull();
+    expect(fuzzyScore("helm plan", "helm-rightsize your turn")).toBeNull();
+  });
+
+  test("substrings and word starts outrank scattered letters", () => {
+    const exact = fuzzyScore("auth", "auth-refactor plan review")!;
+    const scattered = fuzzyScore("auth", "a urgent task here")!;
+    expect(exact).toBeGreaterThan(scattered);
+    expect(fuzzyScore("ref", "auth-refactor")!).toBeGreaterThan(fuzzyScore("ref", "carefully")!);
+  });
+
+  test("letters spread across a sentence do not match", () => {
+    expect(fuzzyScore("trad", "the last activity here was a month ago")).toBeNull();
+    expect(fuzzyScore("trad", "trading")).not.toBeNull();
+    expect(fuzzyScore("trdg", "the trading desk")).not.toBeNull();
+  });
+
+  test("substring-only mode needs the term as typed", () => {
+    expect(fuzzyScore("commit", "shall I commit?", { substringOnly: true })).not.toBeNull();
+    expect(fuzzyScore("cmt", "shall I commit?", { substringOnly: true })).toBeNull();
+  });
+
+  test("matching ignores case", () => {
+    expect(fuzzyScore("PR", "pr review · feat: thing")).not.toBeNull();
+  });
+});
+
+describe("aging", () => {
+  const day = STALE_AFTER_MS;
+
+  const put = (id: string, state: "waiting" | "needs_approval" | "working", ageMs: number, sinceMs = ageMs) => {
+    db.apply({ agent: "claude", sessionId: id, state });
+    db.open()
+      .query("UPDATE sessions SET updated_at = ?, state_since = ? WHERE id = ?")
+      .run(Date.now() - ageMs, Date.now() - sinceMs, id);
+  };
+
+  test("no activity past the threshold makes a session idle", () => {
+    expect(isStale({ updated_at: Date.now() - day - 1000 })).toBe(true);
+    expect(isStale({ updated_at: Date.now() - 3600_000 })).toBe(false);
+  });
+
+  test("idle sessions sort after active ones, even when they need you", () => {
+    put("age-old-blocked", "needs_approval", 3 * day);
+    put("age-fresh-wait", "waiting", 3600_000);
+    const ids = core.sorted().map((s) => s.id).filter((id) => id.startsWith("age-"));
+    expect(ids).toEqual(["age-fresh-wait", "age-old-blocked"]);
+  });
+
+  test("sort order flips within a group", () => {
+    put("age-wait-2h", "waiting", 2 * 3600_000);
+    put("age-wait-5h", "waiting", 5 * 3600_000);
+    const pick = (order: "oldest" | "newest") =>
+      core.sorted(order).map((s) => s.id).filter((id) => id === "age-wait-2h" || id === "age-wait-5h");
+    expect(pick("oldest")).toEqual(["age-wait-5h", "age-wait-2h"]);
+    expect(pick("newest")).toEqual(["age-wait-2h", "age-wait-5h"]);
   });
 });

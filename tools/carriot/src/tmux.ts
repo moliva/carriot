@@ -1,5 +1,5 @@
 import type { TmuxInfo } from "./db";
-import { BLOCKED, type SessionRow } from "./types";
+import { BLOCKED, isStale, type SessionRow } from "./types";
 
 function tmux(...args: string[]): string | null {
   try {
@@ -124,11 +124,14 @@ const BADGE: Record<string, string> = {
   waiting: "#[fg=yellow]●",
   planning: "#[fg=blue]●",
   working: "#[fg=green]●",
+  idle: "#[fg=colour244]○",
 };
 
-/** Worst state across every agent in the window, as a pre-rendered badge in the @carriot_badge window option. */
-export function paintWindow(windowId: string, sessions: SessionRow[]) {
-  let kind = "";
+/** Worst state across the window's active agents (grey when all are idle), as a pre-rendered badge in the @carriot_badge window option. */
+export function paintWindow(windowId: string, all: SessionRow[]) {
+  // Idle sessions only count when the window has nothing active.
+  const sessions = all.filter((s) => !isStale(s));
+  let kind = all.length && !sessions.length ? "idle" : "";
   if (sessions.some((s) => BLOCKED.includes(s.state))) kind = "blocked";
   else if (sessions.some((s) => s.state === "waiting")) kind = "waiting";
   else if (sessions.some((s) => s.state === "working" && s.mode === "plan")) kind = "planning";

@@ -2,7 +2,7 @@ import { join } from "node:path";
 import * as core from "./core";
 import * as db from "./db";
 import * as tmux from "./tmux";
-import { label } from "./types";
+import { isStale, label } from "./types";
 
 const PAGE = join(import.meta.dir, "../web/index.html");
 const RECONCILE_EVERY_MS = 10_000;
@@ -15,6 +15,7 @@ function snapshot() {
     display_name: core.displayName(s),
     label: label(s),
     location: core.location(s),
+    stale: isStale(s),
     artifacts: artifacts.get(s.id) ?? {},
   }));
 }

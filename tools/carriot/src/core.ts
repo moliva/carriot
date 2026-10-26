@@ -1,6 +1,6 @@
 import * as db from "./db";
 import * as tmux from "./tmux";
-import { urgency, type AdapterResult, type AgentEvent, type SessionRow } from "./types";
+import { isStale, urgency, type AdapterResult, type AgentEvent, type SessionRow } from "./types";
 
 const STALE_UNTRACKED_MS = 12 * 3600_000;
 const PURGE_ENDED_MS = 7 * 24 * 3600_000;
@@ -10,7 +10,7 @@ export function ingest(ev: AgentEvent) {
   const info = needsTmux ? tmux.paneInfo(ev.pane!) : {};
   const { prev, next } = db.apply(ev, info);
   if (!next?.window_id) return;
-  if (prev?.state !== next.state || prev?.mode !== next.mode || prev?.window_id !== next.window_id) {
+  if (prev?.state !== next.state || prev?.mode !== next.mode || prev?.window_id !== next.window_id || (prev && isStale(prev))) {
     tmux.paintWindow(next.window_id, db.sessionsInWindow(next.window_id));
     if (prev?.window_id && prev.window_id !== next.window_id)
       tmux.paintWindow(prev.window_id, db.sessionsInWindow(prev.window_id));
@@ -110,6 +110,8 @@ export function reconcile(opts: { background?: boolean } = {}) {
   }
   db.markEnded(dead);
   db.purgeEnded(PURGE_ENDED_MS);
+  // Idleness is time-based (no hook marks it), so windows are repainted here.
+  if (panes) paint(...db.liveSessions().map((s) => s.window_id));
 }
 
 export type Location = "parked" | "background" | "attached" | null;
@@ -186,8 +188,22 @@ export function plainLog(raw: string): string {
     .trim();
 }
 
-export function sorted(): SessionRow[] {
-  return db.liveSessions().sort((a, b) => urgency(a.state) - urgency(b.state) || a.state_since - b.state_since);
+export type SortOrder = "oldest" | "newest";
+
+/**
+ * Active sessions first, idle ones (no activity for a day) last; then by urgency; then by how long each has been
+ * in its state: longest waiting first by default, or most recent first.
+ */
+export function sorted(order: SortOrder = "oldest"): SessionRow[] {
+  const now = Date.now();
+  return db
+    .liveSessions()
+    .sort(
+      (a, b) =>
+        Number(isStale(a, now)) - Number(isStale(b, now)) ||
+        urgency(a.state) - urgency(b.state) ||
+        (order === "oldest" ? a.state_since - b.state_since : b.state_since - a.state_since),
+    );
 }
 
 export function resolve(ref: string): SessionRow | null {

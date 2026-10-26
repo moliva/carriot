@@ -16,6 +16,10 @@ Agent hooks call `bin/carriot hook <agent>`. An adapter (`src/adapters/<agent>.t
 
 Agents without an adapter can push states directly: `carriot emit --agent pi --session <id> --state waiting --detail "…"`.
 
+## Aging
+
+A session with no hook activity (prompt, tool call, reply) for 24 hours is **idle**: reins lists it in a dimmed group at the bottom whatever its state, tmux shows a grey `○` for its window, the picker and dashboard list it last, and `prefix b` reaches it only when no active session is waiting. Ages are brighter the fresher they are (under 2h bright, under a day normal, older dim), and `s` in reins switches between longest-waiting-first and most-recent-first.
+
 ## Background sessions
 
 A session can keep running with no window in your tmux sessions, and carriot reconnects you to it later:
@@ -65,6 +69,7 @@ Optional: `brew install glow git-delta` for nicer plan and diff rendering in the
 |---|---|---|
 | `CARRIOT_DB` | `~/.local/state/carriot/carriot.db` | database path |
 | `CARRIOT_PORT` | `7777` | dashboard port |
+| `CARRIOT_STALE_AFTER_HOURS` | `24` | no activity for this long moves a session to the idle group |
 | `CARRIOT_PR_GATE` | on | set to `0` to record PR previews without forcing a confirmation |
 | `CARRIOT_DEBUG` | off | log raw hook payloads to the `events` table (last 1000) |
 | `CARRIOT_TERMINAL_APP` | `WezTerm` | app brought to front when jumping from the dashboard |

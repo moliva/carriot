@@ -59,6 +59,8 @@ aside { border-right: 1px solid var(--border); background: var(--panel); display
 .s-waiting .dot { background: var(--yellow); }
 .s-working .dot { background: var(--green); animation: pulse 1.6s ease-in-out infinite; }
 .s-planning .dot { background: var(--blue); animation: pulse 1.6s ease-in-out infinite; }
+.s-idle .dot { background: transparent; border: 1.5px solid var(--muted); }
+.s-idle .name, .s-idle .state { color: var(--muted); font-weight: 500; }
 @keyframes pulse { 50% { opacity: .35; } }
 .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .age { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -76,6 +78,7 @@ main { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 .badge { font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; }
 .s-blocked .badge { color: var(--red); background: var(--red-bg); } .s-waiting .badge { color: var(--yellow); background: var(--yellow-bg); }
 .s-working .badge { color: var(--green); background: var(--green-bg); } .s-planning .badge { color: var(--blue); background: var(--blue-bg); }
+.s-idle .badge { color: var(--muted); background: var(--panel-2); }
 .meta { color: var(--muted); font-size: 12px; margin-top: 4px; overflow-wrap: anywhere; }
 .actions { margin-left: auto; display: flex; gap: 8px; }
 .btn { border: 1px solid var(--border); background: var(--panel); border-radius: 6px; padding: 5px 12px; font-size: 13px; }
@@ -163,7 +166,7 @@ const ago = (ts) => {
   const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`;
 };
-const kind = (s) => BLOCKED.includes(s.state) ? "blocked" : s.state === "waiting" ? "waiting" : s.mode === "plan" ? "planning" : "working";
+const kind = (s) => s.stale ? "idle" : BLOCKED.includes(s.state) ? "blocked" : s.state === "waiting" ? "waiting" : s.mode === "plan" ? "planning" : "working";
 const shortCwd = (cwd) => (cwd || "").replace(/^\/Users\/[^/]+/, "~");
 const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 1800); };
 
@@ -176,15 +179,16 @@ const prevKind = new Map();
 const artifactCache = new Map();
 
 function renderList() {
-  const groups = [["Needs you", "blocked"], ["Your turn", "waiting"], ["Working", null]];
+  const groups = [["Needs you", "blocked"], ["Your turn", "waiting"], ["Working", null], ["Idle · no activity for a day", "idle"]];
   const list = $("#list");
   list.replaceChildren();
-  const count = { blocked: 0, waiting: 0, working: 0 };
+  const count = { blocked: 0, waiting: 0, working: 0, idle: 0 };
   for (const s of sessions) count[kind(s) === "planning" ? "working" : kind(s)]++;
   $("#counts").replaceChildren(
     h("span", { class: `pill ${count.blocked ? "red" : ""}` }, `${count.blocked} need you`),
     h("span", { class: `pill ${count.waiting ? "yellow" : ""}` }, `${count.waiting} your turn`),
     h("span", { class: `pill ${count.working ? "green" : ""}` }, `${count.working} working`),
+    h("span", { class: "pill" }, `${count.idle} idle`),
   );
   document.title = count.blocked + count.waiting ? `(${count.blocked + count.waiting}) Carriot` : "Carriot";
   if (!sessions.length) list.append(h("div", { class: "empty" }, "No live sessions yet. Start an agent with the carriot hooks installed."));

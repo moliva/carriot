@@ -1,7 +1,8 @@
 import * as core from "./core";
 import * as db from "./db";
+import { fuzzyScore } from "./fuzzy";
 import * as tmux from "./tmux";
-import { BLOCKED, label, type SessionRow } from "./types";
+import { BLOCKED, isStale, label, STALE_AFTER_MS, type SessionRow } from "./types";
 
 const ESC = "\x1b[";
 const A = {
@@ -25,6 +26,20 @@ const TAB_NAME: Record<Tab, string> = { overview: "overview", plan: "plan", pr: 
 const kind = (s: SessionRow) =>
   BLOCKED.includes(s.state) ? "blocked" : s.state === "waiting" ? "waiting" : s.mode === "plan" ? "planning" : "working";
 const tint = (s: SessionRow) => ({ blocked: A.red, waiting: A.amber, planning: A.blue, working: A.green })[kind(s)];
+
+/** Idle sessions show when they were last active; active ones how long they have been in their state. */
+const ageOf = (s: SessionRow) => (isStale(s) ? s.updated_at : s.state_since);
+
+/** Brighter means fresher: under 2h bright, under a day normal, older dim. */
+function ageTint(ts: number): string {
+  const ms = Date.now() - ts;
+  return ms < 2 * 3600_000 ? `${A.bold}` : ms < 24 * 3600_000 ? "" : `${A.grey}${A.dim}`;
+}
+
+const idleLabel = () => {
+  const h = Math.round(STALE_AFTER_MS / 3600_000);
+  return h % 24 === 0 ? `${h / 24}d` : `${h}h`;
+};
 
 // --- ANSI-aware text helpers -------------------------------------------------
 
@@ -107,6 +122,9 @@ let follow = true;
 let replying: string | null = null;
 let composing: string | null = null;
 let confirmClose: string | null = null;
+/** Active `/` filter query; null when not filtering. */
+let filter: string | null = null;
+let order: core.SortOrder = "oldest";
 let flash: { text: string; until: number } | null = null;
 let lastVersion = -1;
 let lastReconcile = 0;
@@ -117,6 +135,38 @@ const out = process.stdout;
 const cols = () => out.columns ?? 120;
 const rows = () => out.rows ?? 40;
 const selected = () => sessions.find((s) => s.id === selectedId) ?? null;
+
+/** Short identifying fields match fuzzily; status and reply text only match the words as typed. */
+function matchScore(s: SessionRow, query: string): number | null {
+  const names = [core.displayName(s), s.title, core.location(s), s.agent, s.tmux_target, s.cwd?.replace(/^\/Users\/[^/]+/, "~")]
+    .filter(Boolean)
+    .join(" ");
+  const text = [label(s), s.detail, s.last_prompt].filter(Boolean).join(" ");
+  const a = fuzzyScore(query, names);
+  const b = fuzzyScore(query, `${names} ${text}`, { substringOnly: true });
+  return a === null ? b : b === null ? a : Math.max(a, b);
+}
+
+/** Sessions the list shows: all of them, or the ones matching the `/` filter. */
+function visibleSessions(): SessionRow[] {
+  if (!filter?.trim()) return sessions;
+  return sessions.filter((s) => matchScore(s, filter!) !== null);
+}
+
+/** Moves the selection to the best match whenever the query changes or the selection drops out of the results. */
+function selectBestMatch() {
+  if (!filter?.trim()) return;
+  let best: SessionRow | null = null;
+  let bestScore = -Infinity;
+  for (const s of sessions) {
+    const score = matchScore(s, filter);
+    if (score !== null && score > bestScore) {
+      best = s;
+      bestScore = score;
+    }
+  }
+  if (best) select(best.id);
+}
 
 function defaultTab(s: SessionRow): Tab {
   if (s.state === "plan_review" && db.latestArtifact(s.id, "plan")) return "plan";
@@ -143,8 +193,9 @@ function refresh(force = false) {
   if (!force && v === lastVersion) return false;
   lastVersion = v;
   const before = selected();
-  sessions = core.sorted().filter((s) => s.pane !== process.env.TMUX_PANE);
+  sessions = core.sorted(order).filter((s) => s.pane !== process.env.TMUX_PANE);
   if (!selected()) selectedId = sessions[0]?.id ?? null;
+  if (filter?.trim() && !visibleSessions().some((x) => x.id === selectedId)) selectBestMatch();
   const s = selected();
   if (s && !tabPinned && (s.id !== before?.id || s.state !== before?.state)) {
     tab = defaultTab(s);
@@ -170,32 +221,37 @@ function listLines(width: number, height: number): string[] {
   const lines: string[] = [];
   let selLine = 0;
   const groups: [string, (s: SessionRow) => boolean][] = [
-    ["NEEDS YOU", (s) => kind(s) === "blocked"],
-    ["YOUR TURN", (s) => kind(s) === "waiting"],
-    ["WORKING", (s) => kind(s) === "working" || kind(s) === "planning"],
+    ["NEEDS YOU", (s) => !isStale(s) && kind(s) === "blocked"],
+    ["YOUR TURN", (s) => !isStale(s) && kind(s) === "waiting"],
+    ["WORKING", (s) => !isStale(s) && (kind(s) === "working" || kind(s) === "planning")],
+    [`IDLE · no activity for ${idleLabel()}+`, (s) => isStale(s)],
   ];
   for (const [title, match] of groups) {
-    const items = sessions.filter(match);
+    const items = visibleSessions().filter(match);
     if (!items.length) continue;
     if (lines.length) lines.push("");
-    lines.push(` ${A.grey}${title} · ${items.length}${A.reset}`);
+    const [head, ...rest] = title.split(" · ");
+    lines.push(` ${A.grey}${head} · ${items.length}${rest.length ? ` · ${rest.join(" · ")}` : ""}${A.reset}`);
     for (const s of items) {
       const sel = s.id === selectedId;
       if (sel) selLine = lines.length;
       const bg = sel ? A.selBg : "";
+      const idle = isStale(s);
+      const dot = idle ? `${A.dim}${tint(s)}` : tint(s);
       const marker = sel ? `${tint(s)}▌` : " ";
-      const age = core.ago(s.state_since);
+      const age = core.ago(ageOf(s));
       const nameMax = Math.max(4, width - age.length - 5);
       const where = core.location(s);
       const tag = where ? ` ${WHERE[where]}` : "";
       const name = fit(core.displayName(s), Math.max(4, nameMax - Bun.stringWidth(tag)), bg).trimEnd();
       lines.push(
-        `${bg}${marker}${A.reset}${bg}${tint(s)}●${A.reset}${bg} ${A.bold}${fit(`${name}${A.reset}${bg}${A.grey}${tag}`, nameMax, bg)}${A.reset}${bg} ${A.grey}${age}${A.reset}${bg} ${A.reset}`,
+        `${bg}${marker}${A.reset}${bg}${dot}●${A.reset}${bg} ${idle ? A.grey : A.bold}${fit(`${name}${A.reset}${bg}${A.grey}${tag}`, nameMax, bg)}${A.reset}${bg} ${ageTint(ageOf(s))}${age}${A.reset}${bg} ${A.reset}`,
       );
       const detail = s.detail ? ` · ${s.detail.replace(/\s+/g, " ")}` : "";
-      lines.push(fit(`${bg}${marker}${A.reset}${bg}   ${tint(s)}${label(s)}${A.reset}${bg}${A.grey}${detail}`, width, bg));
+      lines.push(fit(`${bg}${marker}${A.reset}${bg}   ${idle ? A.grey : tint(s)}${label(s)}${A.reset}${bg}${A.grey}${detail}`, width, bg));
     }
   }
+  if (sessions.length && !visibleSessions().length) lines.push("", ` ${A.grey}No sessions match /${filter}${A.reset}`, ` ${A.grey}esc clears the filter${A.reset}`);
   if (!sessions.length) lines.push("", ` ${A.grey}No live sessions.${A.reset}`, ` ${A.grey}Agents with carriot hooks show up here.${A.reset}`);
   const start = Math.max(0, Math.min(selLine - Math.floor(height / 2), lines.length - height));
   return lines.slice(start, start + height);
@@ -271,14 +327,21 @@ function detailLines(width: number, height: number): string[] {
 }
 
 function header(width: number): string {
-  const count = { blocked: 0, waiting: 0, working: 0 };
-  for (const s of sessions) count[kind(s) === "planning" ? "working" : (kind(s) as keyof typeof count)]++;
-  const left = ` ${A.bold}CARRIOT REINS${A.reset}   ${A.red}● ${count.blocked} need you${A.reset}   ${A.amber}● ${count.waiting} your turn${A.reset}   ${A.green}● ${count.working} working${A.reset}`;
-  const clock = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return fit(`${left}${" ".repeat(Math.max(1, width - visible(left) - clock.length - 1))}${A.grey}${clock}${A.reset}`, width);
+  const count = { blocked: 0, waiting: 0, working: 0, idle: 0 };
+  for (const s of sessions) count[isStale(s) ? "idle" : kind(s) === "planning" ? "working" : (kind(s) as keyof typeof count)]++;
+  const left = ` ${A.bold}CARRIOT REINS${A.reset}   ${A.red}● ${count.blocked} need you${A.reset}   ${A.amber}● ${count.waiting} your turn${A.reset}   ${A.green}● ${count.working} working${A.reset}   ${A.grey}○ ${count.idle} idle${A.reset}`;
+  const clock = `${A.grey}${order === "oldest" ? "longest waiting first" : "most recent first"} · ${A.reset}${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return fit(`${left}${" ".repeat(Math.max(1, width - visible(left) - visible(clock) - 1))}${A.grey}${clock}${A.reset}`, width);
 }
 
 function footer(width: number): string {
+  if (filter !== null) {
+    const n = visibleSessions().length;
+    return fit(
+      `${A.inverse} / ${A.reset} ${A.bold}${filter}${A.reset}${A.inverse} ${A.reset}  ${A.grey}${n} match${n === 1 ? "" : "es"} · enter jump · ↑↓ ^n/^p move · ^u clear · esc done${A.reset}`,
+      width,
+    );
+  }
   const closing = confirmClose ? sessions.find((x) => x.id === confirmClose) : null;
   if (closing)
     return fit(`${A.inverse}${A.red} close ${A.reset} ${A.bold}${core.displayName(closing)}${A.reset} ${A.grey}and its pane? the conversation stays resumable${A.reset}  ${A.bold}y${A.reset} ${A.grey}close · any other key cancels${A.reset}`, width);
@@ -290,7 +353,7 @@ function footer(width: number): string {
   }
   if (flash && flash.until > Date.now()) return fit(` ${A.bold}${flash.text}${A.reset}`, width);
   const keys = [
-    ["j/k", "move"], ["enter", "open"], ["n", "next waiting"], ["1-4", "tabs"], ["J/K ^d/^u", "scroll"],
+    ["j/k ^n/^p", "move"], ["/", "find"], ["s", "sort"], ["enter", "open"], ["n", "next waiting"], ["1-4", "tabs"], ["J/K ^d/^u", "scroll"],
     ["r", "reply"], ["p", "park"], ["a", "new"], ["x", "close"], ["o", "web"], ["q", "quit"],
   ];
   return fit(` ${keys.map(([k, v]) => `${A.bold}${k}${A.reset} ${A.grey}${v}${A.reset}`).join("  ")}`, width);
@@ -308,7 +371,7 @@ function draw() {
     const right = detailLines(detailW, bodyH);
     for (let i = 0; i < bodyH; i++) lines.push(`${fit(left[i] ?? "", listW)} ${A.grey}│${A.reset} ${fit(right[i] ?? "", detailW)}`);
   } else {
-    const listH = Math.max(6, Math.min(Math.floor(bodyH * 0.4), sessions.length * 2 + 4));
+    const listH = Math.max(6, Math.min(Math.floor(bodyH * 0.4), visibleSessions().length * 2 + 4));
     const left = listLines(W, listH);
     const right = detailLines(W - 2, bodyH - listH - 1);
     for (let i = 0; i < listH; i++) lines.push(fit(left[i] ?? "", W));
@@ -326,8 +389,9 @@ function say(text: string) {
 }
 
 function move(delta: number) {
-  const i = sessions.findIndex((s) => s.id === selectedId);
-  select(sessions[Math.max(0, Math.min(sessions.length - 1, i + delta))]?.id ?? null);
+  const list = visibleSessions();
+  const i = list.findIndex((s) => s.id === selectedId);
+  select(list[Math.max(0, Math.min(list.length - 1, i + delta))]?.id ?? null);
 }
 
 function jump(s: SessionRow | null) {
@@ -347,6 +411,23 @@ function toggleAway(s: SessionRow | null) {
 }
 
 function onKey(key: string) {
+  if (filter !== null) {
+    if (key === "\x1b") filter = null;
+    else if (key === "\r") {
+      filter = null;
+      jump(selected());
+    } else if (key === "\x1b[A" || key === "\x10") move(-1);
+    else if (key === "\x1b[B" || key === "\x0e") move(1);
+    else if (key === "\x15") filter = "";
+    else if (key === "\x7f") {
+      filter = filter.slice(0, -1);
+      selectBestMatch();
+    } else if (key >= " " && !key.startsWith("\x1b")) {
+      filter += key;
+      selectBestMatch();
+    }
+    return;
+  }
   if (confirmClose !== null) {
     const s = sessions.find((x) => x.id === confirmClose);
     confirmClose = null;
@@ -387,14 +468,23 @@ function onKey(key: string) {
       return quit();
     case "j":
     case "\x1b[B":
+    case "\x0e": // ctrl-n
       return move(1);
     case "k":
     case "\x1b[A":
+    case "\x10": // ctrl-p
       return move(-1);
     case "g":
-      return select(sessions[0]?.id ?? null);
+      return select(visibleSessions()[0]?.id ?? null);
     case "G":
-      return select(sessions.at(-1)?.id ?? null);
+      return select(visibleSessions().at(-1)?.id ?? null);
+    case "/":
+      filter = "";
+      return;
+    case "s":
+      order = order === "oldest" ? "newest" : "oldest";
+      refresh(true);
+      return say(order === "oldest" ? "Sorted by longest waiting first" : "Sorted by most recent first");
     case "\r":
       return jump(selected());
     case "n": {
