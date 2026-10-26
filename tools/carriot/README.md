@@ -20,6 +20,15 @@ Agents without an adapter can push states directly: `carriot emit --agent pi --s
 
 A session with no hook activity (prompt, tool call, reply) for 24 hours is **idle**: reins lists it in a dimmed group at the bottom whatever its state, tmux shows a grey `○` for its window, the picker and dashboard list it last, and `prefix b` reaches it only when no active session is waiting. Ages are brighter the fresher they are (under 2h bright, under a day normal, older dim), and `s` in reins switches between longest-waiting-first and most-recent-first.
 
+## Resume after a crash or reboot
+
+Carriot records how each session ended: **lost** (its pane or tmux server vanished without the agent exiting on purpose: crash, reboot, killed window), **closed** (`carriot close`), **exited** (`/exit`, Ctrl-D) or replaced (`/clear`, `/resume`). Pane ids restart with a new tmux server, so each session also remembers which server it ran under; a restart can't make an old session look alive in an unrelated pane.
+
+- **Reins** lists sessions lost in the last day in a LOST group, with a `↻ N lost` hint in the header. `enter` resumes one, `R` resumes all of them, `e` shows every session ended in the last week.
+- **`carriot resume <name>`** reopens one; **`carriot resume --lost`** (or `prefix R`) reopens everything lost in the last day.
+
+Resuming runs `claude --resume <id>` from the directory the session was started in (recorded by the hooks, or read from its conversation file), with `--dangerously-skip-permissions` if it ran in bypass mode. If tmux-resurrect already brought back an empty window with the same name, the session resumes there instead of opening a duplicate. Background sessions resume with `claude --bg --resume`.
+
 ## Background sessions
 
 A session can keep running with no window in your tmux sessions, and carriot reconnects you to it later:
@@ -44,7 +53,7 @@ Jumping to either (`enter`, `carriot jump`, `carriot next`) reconnects first: a 
 
 Hooks live in `carriot/.claude/settings.json`. All except the Bash PR gate run with `async: true`, so they never slow the agent. `hook-pr-gate` exits in bash unless the command contains `gh pr create`.
 
-tmux: everything lives in `carriot.tmux`. It appends the state dot to your existing window formats and binds `prefix T` (reins), `prefix F` (picker popup), `prefix b` (jump to the session waiting longest), `prefix P` (park), `prefix A` (new agent), `prefix X` (close agent and pane, asks first) and `prefix G` (cheatsheet; also `carriot help`). Load it at the end of `~/.tmux.conf`:
+tmux: everything lives in `carriot.tmux`. It appends the state dot to your existing window formats and binds `prefix T` (reins), `prefix F` (picker popup), `prefix b` (jump to the session waiting longest), `prefix P` (park), `prefix A` (new agent), `prefix X` (close agent and pane, asks first), `prefix R` (resume lost sessions, asks first) and `prefix G` (cheatsheet; also `carriot help`). Load it at the end of `~/.tmux.conf`:
 
 ```tmux
 source-file -q ~/carriot/tools/carriot/carriot.tmux

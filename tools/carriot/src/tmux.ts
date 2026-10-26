@@ -11,16 +11,19 @@ function tmux(...args: string[]): string | null {
 }
 
 export function paneInfo(pane: string): TmuxInfo {
-  const out = tmux("display-message", "-p", "-t", pane, "#{window_id}\t#{session_name}:#{window_index}\t#{window_name}");
+  const out = tmux("display-message", "-p", "-t", pane, "#{window_id}\t#{session_name}:#{window_index}\t#{window_name}\t#{pid}");
   if (!out) return {};
-  const [windowId, target, name] = out.split("\t");
+  const [windowId, target, name, server] = out.split("\t");
   // tmux answers with empty fields rather than an error for a pane that no longer exists.
-  return windowId ? { windowId, target, name } : {};
+  return windowId ? { windowId, target, name, server } : {};
 }
 
 export interface PaneInfo extends TmuxInfo {
   session: string;
   attach?: string;
+  /** Only pane in its window. */
+  alone?: boolean;
+  command?: string;
 }
 
 /** Every pane on the server with its current placement; null when tmux is unreachable. */
@@ -29,15 +32,47 @@ export function panes(): Map<string, PaneInfo> | null {
     "list-panes",
     "-a",
     "-F",
-    "#{pane_id}\t#{window_id}\t#{session_name}\t#{session_name}:#{window_index}\t#{window_name}\t#{@carriot_attach}",
+    "#{pane_id}\t#{window_id}\t#{session_name}\t#{session_name}:#{window_index}\t#{window_name}\t#{@carriot_attach}\t#{pid}\t#{window_panes}\t#{pane_current_command}",
   );
   if (out === null) return null;
   const map = new Map<string, PaneInfo>();
   for (const line of out.split("\n").filter(Boolean)) {
-    const [pane, windowId, session, target, name, attach] = line.split("\t");
-    map.set(pane, { windowId, session, target, name, attach: attach || undefined });
+    const [pane, windowId, session, target, name, attach, server, windowPanes, command] = line.split("\t");
+    map.set(pane, {
+      windowId,
+      session,
+      target,
+      name,
+      attach: attach || undefined,
+      server,
+      alone: windowPanes === "1",
+      command,
+    });
   }
   return map;
+}
+
+/** PID of the running tmux server, or null when tmux is not reachable. */
+export function serverPid(): string | null {
+  return tmux("display-message", "-p", "#{pid}") || null;
+}
+
+const SHELLS = new Set(["zsh", "bash", "fish", "sh", "-zsh", "-bash"]);
+
+/**
+ * A window tmux-resurrect brought back after a restart: same name, a single pane sitting at a shell, not used by
+ * any live session. Resuming into it avoids a duplicate window next to the empty restored one.
+ */
+export function restoredShell(name: string, taken: Set<string>): string | null {
+  for (const [pane, info] of panes() ?? [])
+    if (info.name === name && info.alone && SHELLS.has(info.command ?? "") && info.session !== PARK && !taken.has(pane))
+      return pane;
+  return null;
+}
+
+/** Replaces whatever runs in a pane with `command`, keeping the window where it is. */
+export function respawn(pane: string, cwd: string, command: string): boolean {
+  return tmux("respawn-pane", "-k", "-t", pane, "-c", cwd, command) !== null;
 }
 
 /** Hidden tmux session that holds parked agents; it disappears on its own when its last window leaves. */

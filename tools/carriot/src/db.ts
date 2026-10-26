@@ -25,7 +25,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   updated_at INTEGER NOT NULL,
   state_since INTEGER NOT NULL,
   ended_at INTEGER,
-  bg INTEGER NOT NULL DEFAULT 0
+  bg INTEGER NOT NULL DEFAULT 0,
+  end_reason TEXT,
+  project_dir TEXT,
+  tmux_server TEXT
 );
 CREATE TABLE IF NOT EXISTS artifacts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +60,13 @@ export function open(): Database {
   db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 3000; PRAGMA synchronous = NORMAL;");
   db.exec(SCHEMA);
   const cols = new Set(db.query<{ name: string }, []>("PRAGMA table_info(sessions)").all().map((c) => c.name));
-  if (!cols.has("bg")) db.exec("ALTER TABLE sessions ADD COLUMN bg INTEGER NOT NULL DEFAULT 0");
+  const add: Record<string, string> = {
+    bg: "INTEGER NOT NULL DEFAULT 0",
+    end_reason: "TEXT",
+    project_dir: "TEXT",
+    tmux_server: "TEXT",
+  };
+  for (const [col, type] of Object.entries(add)) if (!cols.has(col)) db.exec(`ALTER TABLE sessions ADD COLUMN ${col} ${type}`);
   return db;
 }
 
@@ -69,6 +78,8 @@ export interface TmuxInfo {
   name?: string;
   windowId?: string;
   target?: string;
+  /** PID of the tmux server; pane ids restart with a new server, so a pane only means anything under the same one. */
+  server?: string;
 }
 
 /** Applies an event; returns previous and next rows so callers can react to transitions. */
@@ -83,8 +94,8 @@ export function apply(ev: AgentEvent, tmux: TmuxInfo = {}): { prev: SessionRow |
 
     const stateChanged = !prev || prev.state !== state;
     d.query(
-      `INSERT INTO sessions (id, agent, name, title, cwd, pane, window_id, tmux_target, state, mode, detail, last_prompt, last_message, started_at, updated_at, state_since, ended_at, bg)
-       VALUES ($id, $agent, $name, $title, $cwd, $pane, $window_id, $tmux_target, $state, $mode, $detail, $last_prompt, $last_message, $now, $now, $now, $ended_at, $bg)
+      `INSERT INTO sessions (id, agent, name, title, cwd, pane, window_id, tmux_target, state, mode, detail, last_prompt, last_message, started_at, updated_at, state_since, ended_at, bg, end_reason, project_dir, tmux_server)
+       VALUES ($id, $agent, $name, $title, $cwd, $pane, $window_id, $tmux_target, $state, $mode, $detail, $last_prompt, $last_message, $now, $now, $now, $ended_at, $bg, $end_reason, $project_dir, $tmux_server)
        ON CONFLICT(id) DO UPDATE SET
          name = coalesce($name, name),
          title = coalesce($title, title),
@@ -100,7 +111,10 @@ export function apply(ev: AgentEvent, tmux: TmuxInfo = {}): { prev: SessionRow |
          updated_at = $now,
          state_since = CASE WHEN $state_changed THEN $now ELSE state_since END,
          ended_at = $ended_at,
-         bg = max(bg, $bg)`,
+         bg = max(bg, $bg),
+         end_reason = CASE WHEN state = 'ended' AND $state = 'ended' THEN coalesce(end_reason, $end_reason) ELSE $end_reason END,
+         project_dir = coalesce($project_dir, project_dir),
+         tmux_server = coalesce($tmux_server, tmux_server)`,
     ).run({
       $id: ev.sessionId,
       $agent: ev.agent,
@@ -119,6 +133,9 @@ export function apply(ev: AgentEvent, tmux: TmuxInfo = {}): { prev: SessionRow |
       $state_changed: stateChanged ? 1 : 0,
       $ended_at: state === "ended" ? now : null,
       $bg: ev.background ? 1 : 0,
+      $end_reason: state === "ended" ? (ev.endReason ?? "exited") : null,
+      $project_dir: ev.projectDir ?? null,
+      $tmux_server: tmux.server ?? null,
     });
 
     if (ev.artifact) {
@@ -135,14 +152,16 @@ export function apply(ev: AgentEvent, tmux: TmuxInfo = {}): { prev: SessionRow |
       }
     }
     return { prev, next: getSession(ev.sessionId) };
-  })();
+  }).immediate();
 }
 
 /** Overwrites tmux placement (pane may move between windows and sessions, or detach entirely). */
 export function setTmux(id: string, pane: string | null, info: TmuxInfo) {
   open()
-    .query("UPDATE sessions SET pane = ?, window_id = ?, tmux_target = ?, name = coalesce(?, name) WHERE id = ?")
-    .run(pane, info.windowId ?? null, info.target ?? null, info.name ?? null, id);
+    .query(
+      "UPDATE sessions SET pane = ?, window_id = ?, tmux_target = ?, name = coalesce(?, name), tmux_server = coalesce(?, tmux_server) WHERE id = ?",
+    )
+    .run(pane, info.windowId ?? null, info.target ?? null, info.name ?? null, info.server ?? null, id);
 }
 
 export function logRaw(agent: string, sessionId: string | undefined, type: string | undefined, payload: string) {
@@ -167,11 +186,28 @@ export function sessionsInWindow(windowId: string): SessionRow[] {
     .all(windowId);
 }
 
-export function markEnded(ids: string[]) {
+/**
+ * Why a session ended: `lost` (its pane or tmux server vanished without the agent exiting: crash, reboot, killed
+ * window), `closed` (carriot close), `exited` (the agent quit on purpose), `clear` (replaced by /clear or /resume).
+ */
+export type EndReason = "lost" | "closed" | "exited" | "clear";
+
+export function markEnded(ids: string[], reason: EndReason = "lost") {
   if (!ids.length) return;
-  const q = open().query("UPDATE sessions SET state = 'ended', ended_at = ?, state_since = ? WHERE id = ?");
+  const q = open().query(
+    "UPDATE sessions SET state = 'ended', ended_at = ?, state_since = ?, end_reason = ? WHERE id = ? AND state != 'ended'",
+  );
   const now = Date.now();
-  for (const id of ids) q.run(now, now, id);
+  for (const id of ids) q.run(now, now, reason, id);
+}
+
+/** Ended sessions worth resuming (not ones replaced by /clear), most recently ended first. */
+export function endedSessions(sinceMs: number): SessionRow[] {
+  return open()
+    .query<SessionRow, [number]>(
+      "SELECT * FROM sessions WHERE state = 'ended' AND ended_at >= ? AND coalesce(end_reason, '') != 'clear' ORDER BY ended_at DESC",
+    )
+    .all(Date.now() - sinceMs);
 }
 
 export function purgeEnded(olderThanMs: number) {

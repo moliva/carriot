@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { adapt as claude } from "./adapters/claude";
@@ -30,6 +30,7 @@ ${c.bold}TMUX${c.reset}  ${c.dim}(prefix = C-a)${c.reset}
   prefix b          jump to the session that has waited on you the longest
   prefix P          park the current agent (it keeps running out of sight)
   prefix X          close the current agent and its pane (asks first)
+  prefix R          resume every session lost in the last day (asks first)
   prefix G          this cheatsheet
 
 ${c.bold}WEZTERM${c.reset}  ${c.dim}(no prefix needed)${c.reset}
@@ -45,6 +46,9 @@ ${c.bold}REINS${c.reset}  ${c.dim}carriot reins${c.reset}
   enter             jump to the session's pane   n     jump to next waiting
   1 2 3 4  tab      overview / plan / PR preview / terminal
   J K  ^d ^u  space scroll the right-hand pane
+  enter on ended    resume it (claude --resume in a new window, same directory and mode)
+  R                 resume every session lost in the last day
+  e                 show every session ended in the last week (default: only lost ones)
   r                 reply (type, enter sends, esc cancels)
   p                 park / unpark; detach from a background session
   a                 new agent window (type an optional first prompt, enter starts it)
@@ -73,7 +77,10 @@ ${c.bold}COMMANDS${c.reset}
                               (no argument: the current pane; background sessions detach)
   carriot unpark <name|id>      bring a parked session back without switching to it
   carriot close [name|id]       end a session and close its pane (no argument: the current pane);
-                              background sessions are stopped. Resume later with claude --resume
+                              background sessions are stopped. Bring it back with carriot resume
+  carriot resume <name|id>      reopen an ended session (claude --resume, same directory and mode)
+  carriot resume --lost         reopen everything lost in the last day (crash, reboot, killed window)
+  carriot ls --ended            list ended sessions from the last week
   carriot plan <name|id>        show the latest plan
   carriot pr <name|id>          show the latest PR preview
   carriot screen <name|id>      print the session's terminal
@@ -296,7 +303,7 @@ async function main() {
     }
     case "ls": {
       core.reconcile({ background: true });
-      const list = core.sorted();
+      const list = rest.includes("--ended") ? db.endedSessions(7 * 24 * 3600_000) : core.sorted();
       if (rest.includes("--json")) return console.log(JSON.stringify(list, null, 2));
       const width = Math.max(20, (process.stdout.columns ?? 120) - 55);
       if (rest.includes("--fzf")) return console.log(list.map((s) => `${s.id}\t${row(s, width)}`).join("\n"));
@@ -331,6 +338,19 @@ async function main() {
       if (!s) return notify("no agent session in this pane", true);
       const r = core.close(s);
       return notify(r.message, !r.ok);
+    }
+    case "resume": {
+      core.reconcile();
+      if (rest.includes("--lost")) {
+        const r = core.resumeLost();
+        return notify(r.message, !r.ok);
+      }
+      const s = rest[0] ? core.resolve(rest[0], { ended: true }) : null;
+      if (!s) return notify(rest[0] ? `no session matching '${rest[0]}'` : "usage: carriot resume <name|id> | --lost", true);
+      const r = core.resume(s);
+      if (!r.ok) return notify(r.message, true);
+      if (r.pane) tmux.jump(r.pane, !process.env.TMUX);
+      return notify(r.message);
     }
     case "unpark": {
       const s = need(rest[0]);
@@ -443,9 +463,7 @@ try {
 } catch (err) {
   // A hook must never break the agent it observes.
   if (process.argv[2] === "hook") {
-    try {
-      appendFileSync(join(dirname(db.DB_PATH), "errors.log"), `${new Date().toISOString()} ${(err as Error)?.stack ?? err}\n`);
-    } catch {}
+    core.logError(err);
     process.exit(0);
   }
   throw err;

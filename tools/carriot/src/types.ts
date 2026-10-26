@@ -41,6 +41,10 @@ export interface AgentEvent {
   refreshTmux?: boolean;
   /** Runs detached from any terminal (e.g. `claude --bg`); reconnect by attaching. */
   background?: boolean;
+  /** Directory the agent was started from; resuming must happen there. */
+  projectDir?: string;
+  /** Why a session ended, for `state: "ended"` events (see db.EndReason). */
+  endReason?: "exited" | "clear" | "lost";
 }
 
 export interface AdapterResult {
@@ -68,6 +72,9 @@ export interface SessionRow {
   state_since: number;
   ended_at: number | null;
   bg: number;
+  end_reason: string | null;
+  project_dir: string | null;
+  tmux_server: string | null;
 }
 
 export interface ArtifactRow {
