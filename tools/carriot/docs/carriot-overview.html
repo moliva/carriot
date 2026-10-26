@@ -1,0 +1,457 @@
+<title>Carriot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column (~70ch) with full-bleed "screens" (terminal, popup, dashboard mocks) that break out to a wider track. */
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --sunken: #eceef2;
+  --line: #dadde4;
+  --fg: #1b1f27;
+  --muted: #5d6573;
+  --accent: #3552c8;
+  --accent-soft: #e6eafb;
+  --term-bg: #12151b;
+  --term-fg: #d5dae3;
+  --term-dim: #7a8292;
+  --red: #d23b3b; --red-soft: #fbe9e9;
+  --amber: #b26b00; --amber-soft: #fbf1df;
+  --green: #1d8a4e; --green-soft: #e3f4ea;
+  --blue: #2f62d6; --blue-soft: #e5edfc;
+  --t-red: #ff6b6b; --t-amber: #f2b84b; --t-green: #4cc38a; --t-blue: #6ea0ff;
+  --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1217; --surface: #161a21; --sunken: #1c212a; --line: #2a303b; --fg: #e4e8ef; --muted: #939bab;
+    --accent: #8aa2ff; --accent-soft: #1e2747; --term-bg: #0a0c10;
+    --red: #ff7a7a; --red-soft: #3a1d20; --amber: #f2b84b; --amber-soft: #382c14;
+    --green: #56c98f; --green-soft: #15302a; --blue: #7ea6ff; --blue-soft: #1a2846;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1217; --surface: #161a21; --sunken: #1c212a; --line: #2a303b; --fg: #e4e8ef; --muted: #939bab;
+  --accent: #8aa2ff; --accent-soft: #1e2747; --term-bg: #0a0c10;
+  --red: #ff7a7a; --red-soft: #3a1d20; --amber: #f2b84b; --amber-soft: #382c14;
+  --green: #56c98f; --green-soft: #15302a; --blue: #7ea6ff; --blue-soft: #1a2846;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.62 var(--body); padding-inline: 16px; padding-block: 0 80px; }
+.wrap { max-width: 1080px; margin: 0 auto; }
+.col { max-width: 70ch; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2.1rem, 5vw, 3.2rem); font-weight: 800; letter-spacing: -.02em; }
+h2 { font-size: 1.65rem; font-weight: 700; letter-spacing: -.01em; }
+h3 { font-size: 1.1rem; font-weight: 700; }
+p { margin: 0; }
+a { color: var(--accent); }
+code, kbd, .mono { font-family: var(--mono); font-size: .86em; }
+code { background: var(--sunken); padding: .1em .35em; border-radius: 4px; }
+kbd { background: var(--surface); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: .05em .4em; white-space: nowrap; }
+.eyebrow { font: 600 .74rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.lede { font-size: 1.15rem; color: var(--muted); }
+header { padding-block: 56px 28px; display: grid; gap: 16px; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .9rem; padding-block: 12px; border-block: 1px solid var(--line); }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+section { padding-block: 52px 8px; display: grid; gap: 18px; }
+.stack { display: grid; gap: 14px; }
+
+/* legend of states */
+.states { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.state { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 4px; min-width: 0; }
+.state .k { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.state p { font-size: .9rem; color: var(--muted); }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-block; }
+.d-red { background: var(--red); } .d-amber { background: var(--amber); } .d-green { background: var(--green); } .d-blue { background: var(--blue); }
+
+/* screens */
+.screen { background: var(--term-bg); color: var(--term-fg); border-radius: 12px; font: 13px/1.55 var(--mono); overflow-x: auto; border: 1px solid var(--line); }
+.screen .bar { display: flex; gap: 6px; padding: 10px 14px; border-bottom: 1px solid #ffffff14; color: var(--term-dim); font-size: 12px; align-items: center; }
+.screen .bar i { width: 10px; height: 10px; border-radius: 50%; background: #ffffff22; display: inline-block; }
+.screen pre { margin: 0; padding: 14px 16px; white-space: pre; min-width: max-content; }
+.tr { color: var(--t-red); } .ta { color: var(--t-amber); } .tg { color: var(--t-green); } .tb { color: var(--t-blue); }
+.tdim { color: var(--term-dim); } .tbold { font-weight: 600; color: #fff; }
+.tsel { background: #ffffff14; display: inline-block; min-width: 100%; }
+.caption { font-size: .85rem; color: var(--muted); }
+
+/* timeline workflow */
+.flow { display: grid; gap: 0; counter-reset: step; }
+.step { display: grid; grid-template-columns: 74px 1fr; gap: 16px; padding-block: 16px; border-top: 1px solid var(--line); }
+.step:first-child { border-top: 0; }
+.step .t { font: 600 .82rem/1.4 var(--mono); color: var(--muted); padding-top: 3px; font-variant-numeric: tabular-nums; }
+.step .c { display: grid; gap: 6px; min-width: 0; }
+.step .c p { color: var(--muted); }
+.step .c strong { color: var(--fg); }
+
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+th, td { text-align: left; padding: 10px 14px; border-top: 1px solid var(--line); vertical-align: top; }
+thead th { border-top: 0; background: var(--sunken); font: 600 .74rem/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+td.n { white-space: nowrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; padding: 1px 9px; border-radius: 999px; white-space: nowrap; }
+.p-red { color: var(--red); background: var(--red-soft); } .p-amber { color: var(--amber); background: var(--amber-soft); }
+.p-green { color: var(--green); background: var(--green-soft); } .p-blue { color: var(--blue); background: var(--blue-soft); }
+.yes { color: var(--green); font-weight: 600; } .no { color: var(--muted); }
+
+/* dashboard mock */
+.dash { display: grid; grid-template-columns: 260px 1fr; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); font-size: 13px; }
+.dash aside { border-right: 1px solid var(--line); padding: 12px 8px; display: grid; gap: 2px; align-content: start; }
+.dash .g { font: 600 10.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 10px 8px 4px; }
+.dash .card { padding: 7px 9px; border-radius: 7px; display: grid; gap: 1px; }
+.dash .card.sel { background: var(--sunken); }
+.dash .card .l { display: flex; gap: 7px; align-items: center; font-weight: 600; }
+.dash .card .l span:last-child { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.dash .card small { color: var(--muted); padding-left: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash main { min-width: 0; display: grid; grid-template-rows: auto 1fr auto; }
+.dash .hd { padding: 14px 18px 0; border-bottom: 1px solid var(--line); display: grid; gap: 4px; }
+.dash .hd .r { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.dash .hd .r b { font: 700 16px var(--display); }
+.dash .btn { margin-left: auto; background: var(--accent); color: #fff; border-radius: 6px; padding: 4px 10px; font-weight: 600; font-size: 12px; }
+.dash .tabs { display: flex; gap: 14px; margin-top: 8px; color: var(--muted); }
+.dash .tabs span { padding-bottom: 8px; } .dash .tabs .on { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--accent); }
+.dash .bd { padding: 16px 18px; display: grid; gap: 12px; min-width: 0; }
+.dash .prt { font: 700 18px var(--display); }
+.br { font-family: var(--mono); font-size: 11.5px; background: var(--blue-soft); color: var(--blue); padding: 1px 6px; border-radius: 4px; }
+.box { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.box .h { background: var(--sunken); padding: 6px 12px; font-weight: 600; font-size: 12px; }
+.box .b { padding: 8px 12px; }
+.diff { font: 12px/1.6 var(--mono); overflow-x: auto; }
+.diff div { white-space: pre; padding-inline: 12px; min-width: max-content; }
+.add { background: var(--green-soft); } .del { background: var(--red-soft); } .hunk { color: var(--blue); background: var(--blue-soft); }
+.dash .rp { border-top: 1px solid var(--line); padding: 10px 18px; display: flex; gap: 8px; }
+.dash .rp span:first-child { flex: 1; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; color: var(--muted); background: var(--bg); }
+
+/* architecture */
+.arch { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 12px; }
+.arch svg { display: block; min-width: 760px; width: 100%; height: auto; }
+.arch text { font-family: var(--body); fill: var(--fg); font-size: 13px; }
+.arch .lbl { font-family: var(--mono); fill: var(--muted); font-size: 11px; }
+.arch .ttl { font-family: var(--display); font-weight: 700; font-size: 14px; }
+.arch .n { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+.arch .n-acc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+.arch .e { stroke: var(--muted); stroke-width: 1.3; fill: none; }
+.arch .ah { fill: var(--muted); }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.panel p, .panel li { color: var(--muted); font-size: .93rem; }
+.panel ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.tag { font: 600 .7rem/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: 4px; justify-self: start; }
+.tag.built { color: var(--green); background: var(--green-soft); }
+.tag.next { color: var(--amber); background: var(--amber-soft); }
+.tag.idea { color: var(--blue); background: var(--blue-soft); }
+pre.code { background: var(--term-bg); color: var(--term-fg); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font: 12.5px/1.6 var(--mono); margin: 0; }
+.note { border-left: 3px solid var(--amber); background: var(--amber-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: .93rem; }
+@media (max-width: 760px) {
+  .dash { grid-template-columns: 1fr; }
+  .dash aside { border-right: 0; border-bottom: 1px solid var(--line); }
+  .step { grid-template-columns: 1fr; gap: 4px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pulse { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">carriot · tools/carriot</span>
+    <h1>Carriot</h1>
+    <p class="lede col">One chariot, many horses. See which of your agent sessions is working, which is planning, and which is waiting on you. Jump to that session with one keystroke, and read its plan or PR before you approve it. It works with wezterm + tmux as you use them today.</p>
+    <nav class="toc" aria-label="Contents">
+      <a href="#states">States</a><a href="#day">A day with it</a><a href="#tui">Terminal UI</a><a href="#web">Web dashboard</a><a href="#actions">Actions</a><a href="#background">Background</a><a href="#arch">Architecture</a><a href="#design">Design decisions</a><a href="#setup">Setup</a><a href="#status">Status</a>
+    </nav>
+  </header>
+
+  <section id="states">
+    <span class="eyebrow">The core idea</span>
+    <h2>Every session is in exactly one state</h2>
+    <p class="col">Claude Code runs a small script, called a hook, at each point in a session's life: a prompt you submit, a tool call, a permission prompt, the end of a turn. Each hook records the session's current state in a local SQLite file. Everything else on this page reads that file. States are grouped by what they ask of you:</p>
+    <div class="states">
+      <div class="state"><div class="k"><span class="dot d-red"></span>Needs you</div><p>A permission prompt, a question, a plan waiting for approval, or a PR waiting for approval. The agent can't continue until you act.</p></div>
+      <div class="state"><div class="k"><span class="dot d-amber"></span>Your turn</div><p>The agent finished its turn. Often it ends with “shall I commit?”, and that last line is shown as the detail.</p></div>
+      <div class="state"><div class="k"><span class="dot d-blue pulse"></span>Planning</div><p>Working while in plan mode. It will produce a plan you can read in carriot.</p></div>
+      <div class="state"><div class="k"><span class="dot d-green pulse"></span>Working</div><p>Executing: editing files, running commands, implementing a plan. You can ignore it.</p></div>
+    </div>
+  </section>
+
+  <section id="day">
+    <span class="eyebrow">Proposed workflow</span>
+    <h2>A morning with six sessions open</h2>
+    <div class="flow col">
+      <div class="step"><div class="t">09:02</div><div class="c"><strong>You start sessions the way you do now.</strong><p><code>/carriot:new</code> for a ticket, a review session, and so on. Nothing changes. The hooks are installed in carriot's project settings, so every session there is tracked automatically.</p></div></div>
+      <div class="step"><div class="t">09:15</div><div class="c"><strong>Your tmux status bar shows a coloured dot next to every window.</strong><p>From any window you can see that <code>auth-refactor</code> is red, <code>helm-rightsize</code> is amber, and the rest are green. You no longer cycle through windows to find out.</p></div></div>
+      <div class="step"><div class="t">09:16</div><div class="c"><strong>Press <kbd>prefix</kbd> <kbd>b</kbd> to jump to whoever has waited longest.</strong><p>This is the most-used action. It goes to the blocked session that has waited longest, then the oldest “your turn”. Answer it, press <kbd>prefix</kbd> <kbd>b</kbd> again, and repeat until nothing is waiting.</p></div></div>
+      <div class="step"><div class="t">09:30</div><div class="c"><strong>A plan arrives. Press <kbd>prefix</kbd> <kbd>F</kbd> for the overview popup.</strong><p>The popup lists every session with a preview of the highlighted one. A plan is shown as formatted markdown. Press <kbd>ctrl-p</kbd> to read the full plan, then <kbd>enter</kbd> to go to that session and approve it.</p></div></div>
+      <div class="step"><div class="t">10:40</div><div class="c"><strong>An agent tries to open a PR, and carriot holds it.</strong><p>When the agent runs <code>gh pr create</code>, carriot records the title, description, commits and full diff, then makes Claude Code ask for confirmation. Review the PR in the popup (<kbd>ctrl-r</kbd>) or as a GitHub-style page in the web dashboard, then approve or reject it in the terminal.</p></div></div>
+      <div class="step"><div class="t">11:00</div><div class="c"><strong>Stepping away? Keep the web dashboard open in a browser window.</strong><p>It updates live, sends a desktop notification when a session needs you, and lets you reply to an agent without switching to its terminal.</p></div></div>
+    </div>
+  </section>
+
+  <section id="tui">
+    <span class="eyebrow">Terminal UI</span>
+    <h2>Three terminal surfaces: status bar, popup and control tower</h2>
+    <p class="col">The terminal UI lives inside tmux: dots in the status bar for an at-a-glance view, and an fzf popup on a key for acting on sessions. You don't need a separate app or another window to manage.</p>
+
+    <div class="screen" role="img" aria-label="tmux status bar with coloured state dots per window">
+      <pre><span class="tdim">[work]</span> 1‣auth-refactor <span class="tr">●</span>  2‣helm-rightsize <span class="ta">●</span>  <span class="tbold">3‣carriot-tower <span class="tb">●</span></span>  4‣pr-review <span class="tg">●</span>  5‣flaky-tests <span class="tg">●</span>  6‣zsh</pre>
+    </div>
+    <p class="caption">The tmux status bar. Each window gets the worst state among the agents in it. Windows without an agent show no dot.</p>
+
+    <div class="screen" role="img" aria-label="fzf popup listing sessions with preview">
+      <div class="bar"><i></i><i></i><i></i><span>prefix F · tmux popup</span></div>
+<pre><span class="tdim">enter jump · ctrl-p plan · ctrl-r PR · ctrl-s screen · ctrl-o web · ctrl-l reload</span>
+<span class="tb">agents ›</span>
+<span class="tsel"><span class="tr">●</span> <span class="tbold">auth-refactor              </span> <span class="tr">plan review   </span> <span class="tdim">  4m</span>  Refactor auth: extract TokenService</span>
+<span class="tr">●</span> <span class="tbold">agent-dashboard            </span> <span class="tr">PR review     </span> <span class="tdim">  1m</span>  PR: feat(dashboard): agent overview
+<span class="tr">●</span> <span class="tbold">flaky-tests                </span> <span class="tr">needs approval</span> <span class="tdim">  40s</span> Bash: yarn workspace rpc-proxy test
+<span class="ta">●</span> <span class="tbold">helm-rightsize             </span> <span class="ta">your turn     </span> <span class="tdim"> 12m</span>  Should I commit and open the PR?
+<span class="tb">●</span> <span class="tbold">carriot-tower                </span> <span class="tb">planning      </span> <span class="tdim">  2m</span>  design the TUI
+<span class="tg">●</span> <span class="tbold">pr-review                  </span> <span class="tg">working       </span> <span class="tdim">  6m</span>  review backend#22177
+<span class="tdim">─────────────────────────────────────────────────────────────────────────────────</span>
+<span class="tbold">auth-refactor</span>  <span class="tr">plan review</span> for 4m
+<span class="tdim">claude · ~/carriot/sessions/BEPLAT-1/backend · work:1 · aaaa1111</span>
+<span class="tdim">ctrl-p: plan</span>
+
+<span class="tbold">› refactor auth so tokens are issued by one service</span>
+
+<span class="ta"># Refactor auth</span>
+1. Extract <span class="tr">`TokenService`</span> from the session controller
+2. Move refresh logic behind it and add tests
+3. Delete the duplicated JWT helpers</pre>
+    </div>
+    <p class="caption">The popup is sorted most-urgent first, then by how long each session has waited. The bottom half previews the highlighted session: its plan, its PR summary, or the agent's last reply.</p>
+
+<div class="screen" role="img" aria-label="Control tower: full-screen session list with a detail pane">
+      <div class="bar"><i></i><i></i><i></i><span>prefix T · tower window</span></div>
+<pre> <span class="tbold">CARRIOT TOWER</span>   <span class="tr">● 3 need you</span>   <span class="ta">● 1 your turn</span>   <span class="tg">● 2 working</span>                         <span class="tdim">09:31</span>
+<span class="tdim">──────────────────────────────────────────────────────────────────────────────────────────</span>
+ <span class="tdim">NEEDS YOU · 3</span>                       <span class="tdim">│</span> <span class="tbold">auth-refactor</span>  <span class="tr">plan review</span> <span class="tdim">for 4m</span>
+<span class="tsel"><span class="tr">▌●</span> <span class="tbold">auth-refactor</span>                  4m <span class="tdim">│</span> <span class="tdim">claude · ~/carriot/sessions/BEPLAT-1/backend · mode plan</span></span>
+<span class="tr">▌</span>   <span class="tr">plan review</span> <span class="tdim">· Refactor auth</span>     <span class="tdim">│</span>  1 overview  <span class="tsel"> 2 plan </span>  3 PR preview   4 terminal
+ <span class="tr">●</span> <span class="tbold">agent-dashboard</span>                1m <span class="tdim">│ ─────────────────────────────────────────────────</span>
+    <span class="tr">PR review</span> <span class="tdim">· feat(dashboard): agent…</span>  <span class="tdim">│</span>   <span class="ta"># Refactor auth</span>
+ <span class="tr">●</span> <span class="tbold">flaky-tests</span>                   40s <span class="tdim">│</span>   1. Extract <span class="tr">TokenService</span> from the controller
+    <span class="tr">needs approval</span> <span class="tdim">· Bash: yarn…</span>   <span class="tdim">│</span>   2. Move refresh logic behind it, add tests
+                                     <span class="tdim">│</span>   3. Delete the duplicated JWT helpers
+ <span class="tdim">YOUR TURN · 1</span>                       <span class="tdim">│</span>
+ <span class="ta">●</span> <span class="tbold">helm-rightsize</span>                12m <span class="tdim">│</span>
+    <span class="ta">your turn</span> <span class="tdim">· Should I commit…</span>    <span class="tdim">│</span>
+<span class="tbold">j/k</span> <span class="tdim">move</span>  <span class="tbold">enter</span> <span class="tdim">open</span>  <span class="tbold">n</span> <span class="tdim">next waiting</span>  <span class="tbold">1-4</span> <span class="tdim">tabs</span>  <span class="tbold">J/K</span> <span class="tdim">scroll</span>  <span class="tbold">r</span> <span class="tdim">reply</span>  <span class="tbold">q</span> <span class="tdim">quit</span></pre>
+    </div>
+    <p class="caption">The control tower (<kbd>prefix</kbd> <kbd>T</kbd>) stays open in its own <code>tower</code> window and updates live. Pressing <kbd>prefix</kbd> <kbd>T</kbd> again from anywhere brings it back. <kbd>prefix</kbd> <kbd>G</kbd> opens a cheatsheet of every key and command.</p>
+  </section>
+
+  <section id="web">
+    <span class="eyebrow">Web dashboard</span>
+    <h2>For reading plans and PRs</h2>
+    <p class="col"><code>carriot serve</code> runs a local page at <code>127.0.0.1:7777</code>. <code>carriot open</code> opens it in a frameless Chrome window, so it looks like a native app. Use it for long reading: plans with rendered markdown, and a PR preview with description, commits and a side-by-side diff before the PR exists on GitHub.</p>
+    <div class="dash" role="img" aria-label="Web dashboard mock showing a PR preview">
+      <aside>
+        <div class="g">Needs you · 3</div>
+        <div class="card"><div class="l"><span class="dot d-red"></span>auth-refactor<span>4m</span></div><small>plan review · Refactor auth</small></div>
+        <div class="card sel"><div class="l"><span class="dot d-red"></span>agent-dashboard<span>1m</span></div><small>PR review · feat(dashboard): agent overview</small></div>
+        <div class="card"><div class="l"><span class="dot d-red"></span>flaky-tests<span>40s</span></div><small>needs approval · Bash: yarn test</small></div>
+        <div class="g">Your turn · 1</div>
+        <div class="card"><div class="l"><span class="dot d-amber"></span>helm-rightsize<span>12m</span></div><small>Should I commit and open the PR?</small></div>
+        <div class="g">Working · 2</div>
+        <div class="card"><div class="l"><span class="dot d-blue"></span>carriot-tower<span>2m</span></div><small>planning · design the TUI</small></div>
+        <div class="card"><div class="l"><span class="dot d-green"></span>pr-review<span>6m</span></div><small>working · review backend#22177</small></div>
+      </aside>
+      <main>
+        <div class="hd">
+          <div class="r"><b>agent-dashboard</b><span class="pill p-red">PR review</span><span class="btn">Open in terminal</span></div>
+          <div class="tabs"><span>Overview</span><span>Plan</span><span class="on">PR preview</span><span>Terminal</span></div>
+        </div>
+        <div class="bd">
+          <div class="prt">feat(dashboard): agent overview</div>
+          <div style="color:var(--muted)"><b style="color:var(--fg)">Not created yet</b> · wants to merge <span class="br">carriot-control</span> into <span class="br">main</span> · 14 files changed</div>
+          <div class="box"><div class="h">Description</div><div class="b"><b>Summary</b><br>Tracks every agent session with a state, tmux badges and a web view.</div></div>
+          <div class="box"><div class="h">src/tmux.ts</div>
+            <div class="diff"><div class="hunk">@@ -0,0 +1,6 @@</div><div class="add">+export function jump(pane: string, focusTerminal: boolean) {</div><div class="add">+  tmux("switch-client", "-t", pane);</div><div class="del">-  // TODO</div><div>   tmux("select-pane", "-t", pane);</div></div>
+          </div>
+        </div>
+        <div class="rp"><span>Reply to agent-dashboard…</span><span class="btn" style="margin:0">Send</span></div>
+      </main>
+    </div>
+    <p class="caption">Each tab is chosen for you based on the session's state: a plan review opens on Plan, a PR review on PR preview, and a permission prompt on Terminal (a live capture of the tmux pane).</p>
+  </section>
+
+  <section id="actions">
+    <span class="eyebrow">Actions</span>
+    <h2>What you can do, and where</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Action</th><th>tmux</th><th>Popup</th><th>Web</th><th>CLI</th></tr></thead>
+        <tbody>
+          <tr><td>See every session's state at a glance</td><td class="yes">status dots</td><td class="yes">list</td><td class="yes">sidebar</td><td class="n"><code>carriot ls</code></td></tr>
+          <tr><td>Jump to whoever waited longest</td><td class="yes"><kbd>prefix</kbd> <kbd>b</kbd></td><td class="no">—</td><td class="no">—</td><td class="n"><code>carriot next</code></td></tr>
+          <tr><td>Jump to a specific session</td><td class="no">—</td><td class="yes"><kbd>enter</kbd></td><td class="yes">Open in terminal</td><td class="n"><code>carriot jump &lt;name&gt;</code></td></tr>
+          <tr><td>Read the plan</td><td class="no">—</td><td class="yes"><kbd>ctrl-p</kbd></td><td class="yes">Plan tab</td><td class="n"><code>carriot plan &lt;name&gt;</code></td></tr>
+          <tr><td>Preview the PR before it's created</td><td class="no">—</td><td class="yes"><kbd>ctrl-r</kbd></td><td class="yes">PR preview tab</td><td class="n"><code>carriot pr &lt;name&gt;</code></td></tr>
+          <tr><td>Peek at the terminal without switching</td><td class="no">—</td><td class="yes"><kbd>ctrl-s</kbd></td><td class="yes">Terminal tab</td><td class="n"><code>carriot screen &lt;name&gt;</code></td></tr>
+          <tr><td>Reply to the agent</td><td class="yes">jump, then type</td><td class="no">—</td><td class="yes">Reply box</td><td class="no">—</td></tr>
+          <tr><td>Desktop notification when a session needs you</td><td class="no">—</td><td class="no">—</td><td class="yes">opt-in</td><td class="no">—</td></tr>
+          <tr><td>Approve a permission prompt, plan or PR</td><td colspan="4">Deliberately done in the terminal. You jump there with one key and press the usual key. Approving from elsewhere is possible but risky, because a click lands on whatever happens to be on screen.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="background">
+    <span class="eyebrow">Background sessions</span>
+    <h2>Close the window, keep the agent</h2>
+    <p class="col">A session doesn't need a window in your tmux sessions to keep running. Carriot keeps tracking it and reconnects you when you jump to it.</p>
+    <div class="cols">
+      <div class="panel"><h3>Park it</h3><p><kbd>prefix</kbd> <kbd>P</kbd>, <kbd>p</kbd> in the tower, or <code>carriot park</code>. The window moves into a hidden <code>carriot-parked</code> tmux session and shows as <code>⏸ parked</code>. If the agent shares its window with other panes, only the agent's pane moves. Works for any agent and lasts as long as tmux is running.</p></div>
+      <div class="panel"><h3>Run it in Claude's background</h3><p>Start with <code>claude --bg "…"</code> and the session runs outside tmux entirely, shown as <code>◌ bg</code>. Its terminal output is still readable in the tower through <code>claude logs</code>. Parking an attached background session closes only its window.</p></div>
+      <div class="panel"><h3>Reconnect</h3><p>Jump to it as usual (<kbd>enter</kbd>, <kbd>prefix</kbd> <kbd>b</kbd>, the picker, or the dashboard). A parked window moves back into your current tmux session. A background session opens a new window running <code>claude attach</code>.</p></div>
+    </div>
+  </section>
+
+  <section id="arch">
+    <span class="eyebrow">Architecture</span>
+    <h2>Hooks write, everything else reads</h2>
+    <p class="col">One SQLite file is the single source of truth. Each agent has a small adapter that turns its own events into carriot's common states, so a pi agent can be added later without changing the database, tmux integration, popup or dashboard.</p>
+    <div class="arch">
+      <svg viewBox="0 0 980 360" role="img" aria-label="Architecture: agents emit hook events to adapters, which write to SQLite; tmux badges, the fzf popup and web dashboard read it.">
+        <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker></defs>
+        <rect class="n" x="20" y="40" width="190" height="78" rx="10"/>
+        <text class="ttl" x="36" y="68">Claude Code sessions</text>
+        <text class="lbl" x="36" y="90">hooks: prompt, tool, permission,</text>
+        <text class="lbl" x="36" y="106">notification, stop, end</text>
+        <rect class="n" x="20" y="150" width="190" height="64" rx="10" stroke-dasharray="5 4"/>
+        <text class="ttl" x="36" y="178">pi agents (later)</text>
+        <text class="lbl" x="36" y="198">extension → carriot emit</text>
+
+        <rect class="n" x="270" y="40" width="200" height="174" rx="10"/>
+        <text class="ttl" x="286" y="68">bin/carriot hook</text>
+        <text class="lbl" x="286" y="92">adapters/claude.ts</text>
+        <text class="lbl" x="286" y="110">adapters/pi.ts (later)</text>
+        <text x="286" y="140">normalizes into</text>
+        <text x="286" y="160">one AgentEvent:</text>
+        <text class="lbl" x="286" y="182">state · mode · detail</text>
+        <text class="lbl" x="286" y="200">plan / PR artifacts</text>
+
+        <rect class="n-acc" x="530" y="80" width="170" height="96" rx="10"/>
+        <text class="ttl" x="546" y="110">carriot.db</text>
+        <text class="lbl" x="546" y="132">SQLite, WAL mode</text>
+        <text class="lbl" x="546" y="150">sessions · artifacts</text>
+        <text class="lbl" x="546" y="166">~/.local/state/carriot</text>
+
+        <rect class="n" x="760" y="20" width="200" height="66" rx="10"/>
+        <text class="ttl" x="776" y="48">tmux status dots</text>
+        <text class="lbl" x="776" y="68">@carriot_badge per window</text>
+        <rect class="n" x="760" y="112" width="200" height="66" rx="10"/>
+        <text class="ttl" x="776" y="140">fzf popup</text>
+        <text class="lbl" x="776" y="160">carriot pick · next · jump</text>
+        <rect class="n" x="760" y="204" width="200" height="66" rx="10"/>
+        <text class="ttl" x="776" y="232">Web dashboard</text>
+        <text class="lbl" x="776" y="252">carriot serve · live updates</text>
+
+        <rect class="n" x="530" y="270" width="170" height="66" rx="10"/>
+        <text class="ttl" x="546" y="298">tmux server</text>
+        <text class="lbl" x="546" y="318">switch · capture · send</text>
+
+        <path class="e" d="M210,79 H270" marker-end="url(#ar)"/>
+        <path class="e" d="M210,182 H270" marker-end="url(#ar)" stroke-dasharray="5 4"/>
+        <path class="e" d="M470,128 H530" marker-end="url(#ar)"/>
+        <text class="lbl" x="478" y="120">write</text>
+        <path class="e" d="M700,110 C730,110 730,53 760,53" marker-end="url(#ar)"/>
+        <path class="e" d="M700,140 H760" marker-end="url(#ar)"/>
+        <path class="e" d="M700,160 C730,160 730,237 760,237" marker-end="url(#ar)"/>
+        <text class="lbl" x="712" y="132">read</text>
+        <path class="e" d="M860,178 C860,240 760,303 700,303" marker-end="url(#ar)"/>
+        <path class="e" d="M860,270 C860,300 760,318 700,318" marker-end="url(#ar)"/>
+        <path class="e" d="M370,214 C370,300 470,303 530,303" marker-end="url(#ar)"/>
+        <text class="lbl" x="380" y="292">paint badge</text>
+      </svg>
+    </div>
+
+    <h3>How hook events become states</h3>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Claude Code event</th><th>State</th><th>Also captured</th></tr></thead>
+        <tbody>
+          <tr><td><code>SessionStart</code></td><td><span class="pill p-amber">your turn</span></td><td>tmux pane, window name, session title</td></tr>
+          <tr><td><code>UserPromptSubmit</code></td><td><span class="pill p-green">working</span> / <span class="pill p-blue">planning</span></td><td>your prompt; plan mode is read from <code>permission_mode</code></td></tr>
+          <tr><td><code>PreToolUse</code> · ExitPlanMode</td><td><span class="pill p-red">plan review</span></td><td>the full plan markdown</td></tr>
+          <tr><td><code>PreToolUse</code> · AskUserQuestion</td><td><span class="pill p-red">question</span></td><td>the question text</td></tr>
+          <tr><td><code>PreToolUse</code> · Bash <code>gh pr create</code></td><td><span class="pill p-red">PR review</span></td><td>title, body, base/head, commits, full diff; requests confirmation</td></tr>
+          <tr><td><code>PermissionRequest</code> / <code>Notification</code></td><td><span class="pill p-red">needs approval</span></td><td>which tool and which command</td></tr>
+          <tr><td><code>PostToolUse</code></td><td>back to <span class="pill p-green">working</span></td><td>only if it was blocked; records the created PR URL</td></tr>
+          <tr><td><code>Stop</code></td><td><span class="pill p-amber">your turn</span></td><td>the agent's final reply (its last line becomes the detail)</td></tr>
+          <tr><td><code>SessionEnd</code> or the pane closing</td><td>removed</td><td>kept 7 days, then purged</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="design">
+    <span class="eyebrow">Design decisions</span>
+    <h2>Why it's built this way</h2>
+    <div class="cols">
+      <div class="panel"><h3>Hooks, not screen scraping</h3><p>Claude Code reports exactly what is happening at each point, including the plan text and the final reply. Parsing the terminal would break whenever the interface changes. The built-in <code>claude agents</code> list only reports idle or busy.</p></div>
+      <div class="panel"><h3>SQLite as the contract</h3><p>Several writers (every session's hooks) and several readers (tmux, the popup, the web page, a future Mac app). WAL mode handles that concurrency, it needs no daemon, and you can query it directly with <code>sqlite3</code>.</p></div>
+      <div class="panel"><h3>Agent-agnostic from day one</h3><p>Adapters convert each agent's events into one shared event type. A pi agent gets an adapter, or calls <code>carriot emit --agent pi --state waiting</code> from its extension hooks.</p></div>
+      <div class="panel"><h3>Never slows the agent</h3><p>Every hook runs in the background except the PR check, which has to block. That one has a bash fast path, so Bash calls that aren't <code>gh pr create</code> exit in about 19ms without starting Bun. Hook errors go to a log file and never break the session.</p></div>
+      <div class="panel"><h3>tmux pane is the address</h3><p>Each session is stored with its <code>$TMUX_PANE</code>, which makes jumping exact. When a pane disappears, the session is marked ended, which also cleans up after crashes.</p></div>
+      <div class="panel"><h3>Locked-down local web</h3><p>The dashboard can type into your agents, so it binds to localhost only, checks the Host header (to block DNS rebinding), and requires a token that changes each run (to block cross-site requests). Without these, any website could send keystrokes to an agent.</p></div>
+    </div>
+  </section>
+
+  <section id="setup">
+    <span class="eyebrow">Setup</span>
+    <h2>Three pieces to switch it on</h2>
+    <div class="stack col">
+      <p><strong>1. Hooks</strong> in <code>carriot/.claude/settings.json</code>. Running sessions pick them up automatically.</p>
+<pre class="code">"hooks": {
+  "SessionStart":      [{ "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/carriot hook claude", "async": true }] }],
+  "UserPromptSubmit":  [{ "hooks": [{ … same, async … }] }],
+  "PreToolUse": [
+    { "matcher": "ExitPlanMode|AskUserQuestion", "hooks": [{ … same, async … }] },
+    { "matcher": "Bash", "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/carriot hook-pr-gate claude" }] }
+  ],
+  "PermissionRequest": [{ "hooks": [{ … async … }] }],
+  "PostToolUse":       [{ "hooks": [{ … async … }] }],
+  "Notification":      [{ "hooks": [{ … async … }] }],
+  "Stop":              [{ "hooks": [{ … async … }] }],
+  "SessionEnd":        [{ "hooks": [{ … }] }]
+}</pre>
+      <p><strong>2. tmux</strong>: one line at the end of <code>~/.tmux.conf</code>. <code>carriot.tmux</code> appends the dot to your existing window formats and binds <kbd>prefix</kbd> <kbd>F</kbd> and <kbd>prefix</kbd> <kbd>b</kbd>. Comment the line out to turn carriot off.</p>
+<pre class="code">source-file -q ~/carriot/tools/carriot/carriot.tmux</pre>
+      <p><strong>3. WezTerm shortcuts</strong>: <code>carriot.wezterm.lua</code>, loaded at the end of <code>wezterm.lua</code>, maps CMD keys onto the tmux bindings so you never type the prefix: <kbd>⌘⇧T</kbd> new agent, <kbd>⌘B</kbd> next waiting, <kbd>⌘⇧A</kbd> tower, <kbd>⌘G</kbd> picker, <kbd>⌘⇧P</kbd> park, <kbd>⌘/</kbd> cheatsheet, <kbd>⌘⇧O</kbd> dashboard.</p>
+      <p><strong>4. Optional nicer rendering</strong>: <code>brew install glow git-delta</code>. Without them, plans and diffs fall back to plain colour output.</p>
+    </div>
+  </section>
+
+  <section id="status">
+    <span class="eyebrow">Status</span>
+    <h2>Where it stands</h2>
+    <div class="cols">
+      <div class="panel"><span class="tag built">Built &amp; tested</span><ul>
+        <li>Hook adapter for Claude Code, SQLite store, tmux badges</li>
+        <li>CLI: <code>ls</code>, <code>next</code>, <code>jump</code>, <code>plan</code>, <code>pr</code>, <code>screen</code>, <code>pick</code>, <code>emit</code></li>
+        <li>Web dashboard with live updates, plan and PR views, reply, notifications</li>
+        <li>17 unit tests, typecheck clean, end-to-end smoke run with sample hook payloads</li>
+      </ul></div>
+      <div class="panel"><span class="tag next">Before it's live</span><ul>
+        <li>Add the hooks to settings and the lines to your tmux theme</li>
+        <li>Check that the PR hold also triggers in bypass-permissions mode. The docs don't say, so it needs a real <code>gh pr create</code></li>
+        <li>Run it against a real day of sessions and tune the state mapping</li>
+      </ul></div>
+      <div class="panel"><span class="tag idea">Next options</span><ul>
+                <li>Keep the dashboard always running (launchd) so it's always available</li>
+        <li>pi adapter once you start running pi agents</li>
+        <li>Native SwiftUI menu-bar app reading the same database</li>
+      </ul></div>
+    </div>
+  </section>
+</div>

@@ -93,5 +93,18 @@
         "index.crates.io"
       ]
     }
+  },
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/carriot hook claude", "async": true }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/carriot hook claude", "async": true }] }],
+    "PreToolUse": [
+      { "matcher": "ExitPlanMode|AskUserQuestion", "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/carriot hook claude", "async": true }] },
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/carriot hook-pr-gate claude", "timeout": 30 }] }
+    ],
+    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/carriot hook claude", "async": true }] }],
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/carriot hook claude", "async": true }] }],
+    "Notification": [{ "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/carriot hook claude", "async": true }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/carriot hook claude", "async": true }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/bin/carriot hook claude" }] }]
   }
 }

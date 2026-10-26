@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# carriot: status of every agent session. See tools/carriot/README.md.
+
+# Blocking PreToolUse hook on every Bash call: bail out before anything else unless it creates a PR.
+if [[ "${1:-}" == "hook-pr-gate" ]]; then
+  payload="$(cat)"
+  [[ "$payload" == *"gh pr create"* ]] || exit 0
+  set -- hook "${2:-claude}"
+fi
+
+CARRIOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../tools/carriot" && pwd)"
+BUN="$(command -v bun || echo "$HOME/.bun/bin/bun")"
+if [[ ! -x "$BUN" ]]; then
+  [[ "${1:-}" == hook* ]] && exit 0
+  echo "carriot: bun not found" >&2
+  exit 1
+fi
+export CARRIOT_BIN="${CARRIOT_BIN:-$CARRIOT_DIR/../../bin/carriot}"
+
+if [[ -n "${payload:-}" ]]; then
+  printf '%s' "$payload" | exec "$BUN" "$CARRIOT_DIR/src/cli.ts" "$@"
+fi
+exec "$BUN" "$CARRIOT_DIR/src/cli.ts" "$@"
