@@ -24,7 +24,7 @@ enter / jump reconnects anything: parked sessions come back, background ones ope
 
 ${c.bold}TMUX${c.reset}  ${c.dim}(prefix = C-a)${c.reset}
   prefix A          new agent window (claude --dangerously-skip-permissions)
-  prefix T          control tower (full-screen, stays open in a "tower" window)
+  prefix T          reins: every session, full screen (stays open in a "reins" window)
   prefix F          picker popup
   prefix b          jump to the session that has waited on you the longest
   prefix P          park the current agent (it keeps running out of sight)
@@ -33,11 +33,11 @@ ${c.bold}TMUX${c.reset}  ${c.dim}(prefix = C-a)${c.reset}
 
 ${c.bold}WEZTERM${c.reset}  ${c.dim}(no prefix needed)${c.reset}
   cmd+shift+t       new agent window          cmd+b         next waiting
-  cmd+shift+a       control tower             cmd+g         picker popup
+  cmd+shift+a       reins (all sessions)      cmd+g         picker popup
   cmd+shift+p       park the current agent    cmd+shift+o   web dashboard
-  cmd+shift+w       close the current agent       cmd+/         this cheatsheet
+  cmd+shift+w       close the current agent   cmd+/         this cheatsheet
 
-${c.bold}TOWER${c.reset}  ${c.dim}carriot tower${c.reset}
+${c.bold}REINS${c.reset}  ${c.dim}carriot reins${c.reset}
   j k  ↑ ↓          move between sessions        g G   first / last
   enter             jump to the session's pane   n     jump to next waiting
   1 2 3 4  tab      overview / plan / PR preview / terminal
@@ -357,9 +357,9 @@ async function main() {
     }
     case "pick":
       return pick();
-    case "tower": {
-      const { tower } = await import("./tower");
-      return tower();
+    case "reins": {
+      const { reins } = await import("./reins");
+      return reins();
     }
     case "help":
     case "--help":

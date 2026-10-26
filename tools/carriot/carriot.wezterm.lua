@@ -18,7 +18,7 @@ function M.apply(config, keys)
     { mods = "CMD|SHIFT", key = "t", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "a" }) },
     -- jump to the session that has waited on you the longest
     { mods = "CMD", key = "b", action = keys.tmux_prefixed_key({ key = "b" }) },
-    -- control tower
+    -- reins: every session, full screen
     { mods = "CMD|SHIFT", key = "a", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "t" }) },
     -- picker popup
     { mods = "CMD", key = "g", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "f" }) },

@@ -197,11 +197,11 @@ pre.code { background: var(--term-bg); color: var(--term-fg); border-radius: 10p
 
   <section id="tui">
     <span class="eyebrow">Terminal UI</span>
-    <h2>Three terminal surfaces: status bar, popup and control tower</h2>
+    <h2>Three terminal surfaces: status bar, popup and reins</h2>
     <p class="col">The terminal UI lives inside tmux: dots in the status bar for an at-a-glance view, and an fzf popup on a key for acting on sessions. You don't need a separate app or another window to manage.</p>
 
     <div class="screen" role="img" aria-label="tmux status bar with coloured state dots per window">
-      <pre><span class="tdim">[work]</span> 1‣auth-refactor <span class="tr">●</span>  2‣helm-rightsize <span class="ta">●</span>  <span class="tbold">3‣carriot-tower <span class="tb">●</span></span>  4‣pr-review <span class="tg">●</span>  5‣flaky-tests <span class="tg">●</span>  6‣zsh</pre>
+      <pre><span class="tdim">[work]</span> 1‣auth-refactor <span class="tr">●</span>  2‣helm-rightsize <span class="ta">●</span>  <span class="tbold">3‣carriot-reins <span class="tb">●</span></span>  4‣pr-review <span class="tg">●</span>  5‣flaky-tests <span class="tg">●</span>  6‣zsh</pre>
     </div>
     <p class="caption">The tmux status bar. Each window gets the worst state among the agents in it. Windows without an agent show no dot.</p>
 
@@ -213,7 +213,7 @@ pre.code { background: var(--term-bg); color: var(--term-fg); border-radius: 10p
 <span class="tr">●</span> <span class="tbold">agent-dashboard            </span> <span class="tr">PR review     </span> <span class="tdim">  1m</span>  PR: feat(dashboard): agent overview
 <span class="tr">●</span> <span class="tbold">flaky-tests                </span> <span class="tr">needs approval</span> <span class="tdim">  40s</span> Bash: yarn workspace rpc-proxy test
 <span class="ta">●</span> <span class="tbold">helm-rightsize             </span> <span class="ta">your turn     </span> <span class="tdim"> 12m</span>  Should I commit and open the PR?
-<span class="tb">●</span> <span class="tbold">carriot-tower                </span> <span class="tb">planning      </span> <span class="tdim">  2m</span>  design the TUI
+<span class="tb">●</span> <span class="tbold">carriot-reins                </span> <span class="tb">planning      </span> <span class="tdim">  2m</span>  design the TUI
 <span class="tg">●</span> <span class="tbold">pr-review                  </span> <span class="tg">working       </span> <span class="tdim">  6m</span>  review backend#22177
 <span class="tdim">─────────────────────────────────────────────────────────────────────────────────</span>
 <span class="tbold">auth-refactor</span>  <span class="tr">plan review</span> for 4m
@@ -229,9 +229,9 @@ pre.code { background: var(--term-bg); color: var(--term-fg); border-radius: 10p
     </div>
     <p class="caption">The popup is sorted most-urgent first, then by how long each session has waited. The bottom half previews the highlighted session: its plan, its PR summary, or the agent's last reply.</p>
 
-<div class="screen" role="img" aria-label="Control tower: full-screen session list with a detail pane">
-      <div class="bar"><i></i><i></i><i></i><span>prefix T · tower window</span></div>
-<pre> <span class="tbold">CARRIOT TOWER</span>   <span class="tr">● 3 need you</span>   <span class="ta">● 1 your turn</span>   <span class="tg">● 2 working</span>                         <span class="tdim">09:31</span>
+<div class="screen" role="img" aria-label="Reins: full-screen session list with a detail pane">
+      <div class="bar"><i></i><i></i><i></i><span>prefix T · reins window</span></div>
+<pre> <span class="tbold">CARRIOT REINS</span>   <span class="tr">● 3 need you</span>   <span class="ta">● 1 your turn</span>   <span class="tg">● 2 working</span>                         <span class="tdim">09:31</span>
 <span class="tdim">──────────────────────────────────────────────────────────────────────────────────────────</span>
  <span class="tdim">NEEDS YOU · 3</span>                       <span class="tdim">│</span> <span class="tbold">auth-refactor</span>  <span class="tr">plan review</span> <span class="tdim">for 4m</span>
 <span class="tsel"><span class="tr">▌●</span> <span class="tbold">auth-refactor</span>                  4m <span class="tdim">│</span> <span class="tdim">claude · ~/carriot/sessions/BEPLAT-1/backend · mode plan</span></span>
@@ -246,7 +246,7 @@ pre.code { background: var(--term-bg); color: var(--term-fg); border-radius: 10p
     <span class="ta">your turn</span> <span class="tdim">· Should I commit…</span>    <span class="tdim">│</span>
 <span class="tbold">j/k</span> <span class="tdim">move</span>  <span class="tbold">enter</span> <span class="tdim">open</span>  <span class="tbold">n</span> <span class="tdim">next waiting</span>  <span class="tbold">1-4</span> <span class="tdim">tabs</span>  <span class="tbold">J/K</span> <span class="tdim">scroll</span>  <span class="tbold">r</span> <span class="tdim">reply</span>  <span class="tbold">q</span> <span class="tdim">quit</span></pre>
     </div>
-    <p class="caption">The control tower (<kbd>prefix</kbd> <kbd>T</kbd>) stays open in its own <code>tower</code> window and updates live. Pressing <kbd>prefix</kbd> <kbd>T</kbd> again from anywhere brings it back. <kbd>prefix</kbd> <kbd>G</kbd> opens a cheatsheet of every key and command.</p>
+    <p class="caption">Reins (<kbd>prefix</kbd> <kbd>T</kbd>) stays open in its own <code>reins</code> window and updates live. Pressing <kbd>prefix</kbd> <kbd>T</kbd> again from anywhere brings it back. <kbd>prefix</kbd> <kbd>G</kbd> opens a cheatsheet of every key and command.</p>
   </section>
 
   <section id="web">
@@ -262,7 +262,7 @@ pre.code { background: var(--term-bg); color: var(--term-fg); border-radius: 10p
         <div class="g">Your turn · 1</div>
         <div class="card"><div class="l"><span class="dot d-amber"></span>helm-rightsize<span>12m</span></div><small>Should I commit and open the PR?</small></div>
         <div class="g">Working · 2</div>
-        <div class="card"><div class="l"><span class="dot d-blue"></span>carriot-tower<span>2m</span></div><small>planning · design the TUI</small></div>
+        <div class="card"><div class="l"><span class="dot d-blue"></span>carriot-reins<span>2m</span></div><small>planning · design the TUI</small></div>
         <div class="card"><div class="l"><span class="dot d-green"></span>pr-review<span>6m</span></div><small>working · review backend#22177</small></div>
       </aside>
       <main>
@@ -310,8 +310,8 @@ pre.code { background: var(--term-bg); color: var(--term-fg); border-radius: 10p
     <h2>Close the window, keep the agent</h2>
     <p class="col">A session doesn't need a window in your tmux sessions to keep running. Carriot keeps tracking it and reconnects you when you jump to it.</p>
     <div class="cols">
-      <div class="panel"><h3>Park it</h3><p><kbd>prefix</kbd> <kbd>P</kbd>, <kbd>p</kbd> in the tower, or <code>carriot park</code>. The window moves into a hidden <code>carriot-parked</code> tmux session and shows as <code>⏸ parked</code>. If the agent shares its window with other panes, only the agent's pane moves. Works for any agent and lasts as long as tmux is running.</p></div>
-      <div class="panel"><h3>Run it in Claude's background</h3><p>Start with <code>claude --bg "…"</code> and the session runs outside tmux entirely, shown as <code>◌ bg</code>. Its terminal output is still readable in the tower through <code>claude logs</code>. Parking an attached background session closes only its window.</p></div>
+      <div class="panel"><h3>Park it</h3><p><kbd>prefix</kbd> <kbd>P</kbd>, <kbd>p</kbd> in reins, or <code>carriot park</code>. The window moves into a hidden <code>carriot-parked</code> tmux session and shows as <code>⏸ parked</code>. If the agent shares its window with other panes, only the agent's pane moves. Works for any agent and lasts as long as tmux is running.</p></div>
+      <div class="panel"><h3>Run it in Claude's background</h3><p>Start with <code>claude --bg "…"</code> and the session runs outside tmux entirely, shown as <code>◌ bg</code>. Its terminal output is still readable in reins through <code>claude logs</code>. Parking an attached background session closes only its window.</p></div>
       <div class="panel"><h3>Reconnect</h3><p>Jump to it as usual (<kbd>enter</kbd>, <kbd>prefix</kbd> <kbd>b</kbd>, the picker, or the dashboard). A parked window moves back into your current tmux session. A background session opens a new window running <code>claude attach</code>.</p></div>
     </div>
   </section>
@@ -427,7 +427,7 @@ pre.code { background: var(--term-bg); color: var(--term-fg); border-radius: 10p
 }</pre>
       <p><strong>2. tmux</strong>: one line at the end of <code>~/.tmux.conf</code>. <code>carriot.tmux</code> appends the dot to your existing window formats and binds <kbd>prefix</kbd> <kbd>F</kbd> and <kbd>prefix</kbd> <kbd>b</kbd>. Comment the line out to turn carriot off.</p>
 <pre class="code">source-file -q ~/carriot/tools/carriot/carriot.tmux</pre>
-      <p><strong>3. WezTerm shortcuts</strong>: <code>carriot.wezterm.lua</code>, loaded at the end of <code>wezterm.lua</code>, maps CMD keys onto the tmux bindings so you never type the prefix: <kbd>⌘⇧T</kbd> new agent, <kbd>⌘B</kbd> next waiting, <kbd>⌘⇧A</kbd> tower, <kbd>⌘G</kbd> picker, <kbd>⌘⇧P</kbd> park, <kbd>⌘/</kbd> cheatsheet, <kbd>⌘⇧O</kbd> dashboard.</p>
+      <p><strong>3. WezTerm shortcuts</strong>: <code>carriot.wezterm.lua</code>, loaded at the end of <code>wezterm.lua</code>, maps CMD keys onto the tmux bindings so you never type the prefix: <kbd>⌘⇧T</kbd> new agent, <kbd>⌘B</kbd> next waiting, <kbd>⌘⇧A</kbd> reins, <kbd>⌘G</kbd> picker, <kbd>⌘⇧P</kbd> park, <kbd>⌘/</kbd> cheatsheet, <kbd>⌘⇧O</kbd> dashboard.</p>
       <p><strong>4. Optional nicer rendering</strong>: <code>brew install glow git-delta</code>. Without them, plans and diffs fall back to plain colour output.</p>
     </div>
   </section>

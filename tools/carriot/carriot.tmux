@@ -9,8 +9,8 @@ set -ga window-status-current-format " #{E:@carriot_badge}"
 bind F display-popup -E -w 90% -h 80% "~/carriot/bin/carriot pick"
 bind b run-shell "TMUX_PANE=#{pane_id} ~/carriot/bin/carriot next"
 
-# prefix T: control tower in its own window (reuses it if open). prefix G: cheatsheet.
-bind T run-shell "tmux select-window -t '=tower' 2>/dev/null || tmux new-window -n tower '~/carriot/bin/carriot tower'"
+# prefix T: reins in its own window (reuses it if open). prefix G: cheatsheet.
+bind T run-shell "tmux select-window -t '=reins' 2>/dev/null || tmux new-window -n reins '~/carriot/bin/carriot reins'"
 bind G display-popup -E -w 90 -h 90% "~/carriot/bin/carriot help | less -R"
 
 # prefix P: park the agent in the current pane (or detach from a background session); it keeps running.

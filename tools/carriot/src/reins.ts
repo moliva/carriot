@@ -273,7 +273,7 @@ function detailLines(width: number, height: number): string[] {
 function header(width: number): string {
   const count = { blocked: 0, waiting: 0, working: 0 };
   for (const s of sessions) count[kind(s) === "planning" ? "working" : (kind(s) as keyof typeof count)]++;
-  const left = ` ${A.bold}CARRIOT TOWER${A.reset}   ${A.red}● ${count.blocked} need you${A.reset}   ${A.amber}● ${count.waiting} your turn${A.reset}   ${A.green}● ${count.working} working${A.reset}`;
+  const left = ` ${A.bold}CARRIOT REINS${A.reset}   ${A.red}● ${count.blocked} need you${A.reset}   ${A.amber}● ${count.waiting} your turn${A.reset}   ${A.green}● ${count.working} working${A.reset}`;
   const clock = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return fit(`${left}${" ".repeat(Math.max(1, width - visible(left) - clock.length - 1))}${A.grey}${clock}${A.reset}`, width);
 }
@@ -488,9 +488,9 @@ function quit() {
   process.exit(0);
 }
 
-export function tower() {
+export function reins() {
   if (!process.stdin.isTTY) {
-    console.error("carriot tower needs a terminal");
+    console.error("carriot reins needs a terminal");
     process.exit(1);
   }
   out.write(`${ESC}?1049h${ESC}?25l${ESC}2J`);
