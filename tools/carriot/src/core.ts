@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import * as db from "./db";
 import * as tmux from "./tmux";
 import { isStale, urgency, type AdapterResult, type AgentEvent, type SessionRow } from "./types";
@@ -84,7 +85,7 @@ export function syncBackground(agents: BackgroundAgent[] | null) {
       state: fresh ? (a.status === "busy" ? "working" : "waiting") : undefined,
     });
   }
-  db.markEnded(db.liveSessions().filter((s) => s.bg && !ids.has(s.id)).map((s) => s.id));
+  db.markEnded(db.liveSessions().filter((s) => s.bg && !ids.has(s.id)).map((s) => s.id), "lost");
 }
 
 /**
@@ -94,9 +95,16 @@ export function syncBackground(agents: BackgroundAgent[] | null) {
 export function reconcile(opts: { background?: boolean } = {}) {
   if (opts.background) syncBackground(listBackground());
   const panes = tmux.panes();
+  const server = panes ? tmux.serverPid() : null;
   const now = Date.now();
   const dead: string[] = [];
   for (const s of db.liveSessions()) {
+    // Pane ids restart with a new tmux server (reboot, kill-server), so an old id may now name an unrelated pane.
+    if (s.pane && server && s.tmux_server && s.tmux_server !== server) {
+      if (s.bg) place(s.id, null);
+      else dead.push(s.id);
+      continue;
+    }
     if (!s.pane) {
       if (!s.bg && now - s.updated_at > STALE_UNTRACKED_MS) dead.push(s.id);
       continue;
@@ -106,9 +114,10 @@ export function reconcile(opts: { background?: boolean } = {}) {
     if (!p) {
       if (s.bg) place(s.id, null);
       else dead.push(s.id);
-    } else if (p.windowId !== s.window_id || p.target !== s.tmux_target || p.name !== s.name) place(s.id, s.pane, p);
+    } else if (p.windowId !== s.window_id || p.target !== s.tmux_target || p.name !== s.name || !s.tmux_server)
+      place(s.id, s.pane, p);
   }
-  db.markEnded(dead);
+  db.markEnded(dead, "lost");
   db.purgeEnded(PURGE_ENDED_MS);
   // Idleness is time-based (no hook marks it), so windows are repainted here.
   if (panes) paint(...db.liveSessions().map((s) => s.window_id));
@@ -152,14 +161,15 @@ export function sendAway(s: SessionRow): { ok: boolean; message: string } {
  * background session with `claude stop` and closes its attach window. Conversations stay resumable.
  */
 export function close(s: SessionRow): { ok: boolean; message: string } {
+  if (!s.bg && !s.pane) return { ok: false, message: "That session is not in tmux." };
+  // Record the intent first: killing the pane makes the agent's exit hook report a hangup, which reads as lost.
+  db.markEnded([s.id], "closed");
   if (s.bg) {
     const claude = Bun.which("claude");
     const p = claude ? Bun.spawnSync([claude, "stop", s.id.slice(0, 8)], { stdout: "ignore", stderr: "ignore" }) : null;
     if (s.pane) tmux.detach(s.pane);
     if (p?.exitCode !== 0) return { ok: false, message: "Could not stop the background session." };
-  } else if (!s.pane) return { ok: false, message: "That session is not in tmux." };
-  else if (!tmux.detach(s.pane)) return { ok: false, message: "Could not close its pane." };
-  db.markEnded([s.id]);
+  } else if (!tmux.detach(s.pane!)) return { ok: false, message: "Could not close its pane." };
   paint(s.window_id);
   return { ok: true, message: `closed ${displayName(s)}` };
 }
@@ -206,8 +216,8 @@ export function sorted(order: SortOrder = "oldest"): SessionRow[] {
     );
 }
 
-export function resolve(ref: string): SessionRow | null {
-  const all = db.liveSessions();
+export function resolve(ref: string, opts: { ended?: boolean } = {}): SessionRow | null {
+  const all = [...db.liveSessions(), ...(opts.ended ? db.endedSessions(PURGE_ENDED_MS) : [])];
   return (
     all.find((s) => s.id === ref) ??
     all.find((s) => s.id.startsWith(ref)) ??
@@ -234,6 +244,13 @@ export function ago(ts: number): string {
 
 const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
+/** Window command: runs claude through an interactive shell (so PATH and rc files apply), then leaves that shell. */
+function windowCommand(args: string[]): string {
+  const shell = process.env.SHELL || "/bin/zsh";
+  const cmd = ["claude", ...args].join(" ");
+  return `${shell} -ic ${shellQuote(`${cmd}; exec ${shell} -l`)}`;
+}
+
 /**
  * Starts a new Claude session: a tmux window next to the current one that drops into a shell when Claude exits,
  * or a `claude --bg` background session.
@@ -254,10 +271,75 @@ export function newAgent(opts: {
     const out = `${p.stdout}${p.stderr}`.trim();
     return { ok: p.exitCode === 0, message: out || "Started in the background." };
   }
-  // Run through an interactive login shell so PATH and rc files apply, then leave that shell behind.
-  const shell = process.env.SHELL || "/bin/zsh";
-  const cmd = ["claude", ...flags, ...(prompt ? [shellQuote(prompt)] : [])].join(" ");
-  const pane = tmux.newWindow({ cwd: opts.cwd, name: opts.name ?? "claude", command: `${shell} -ic ${shellQuote(`${cmd}; exec ${shell} -l`)}` });
+  const pane = tmux.newWindow({
+    cwd: opts.cwd,
+    name: opts.name ?? "claude",
+    command: windowCommand([...flags, ...(prompt ? [shellQuote(prompt)] : [])]),
+  });
   if (!pane) return { ok: false, message: "Could not open a tmux window (is tmux running?)." };
   return { ok: true, message: prompt ? `new agent: ${prompt.slice(0, 50)}` : "new agent started" };
+}
+
+/** Lost sessions from the last day are what "resume everything" brings back after a crash or reboot. */
+export const RESUME_LOST_WINDOW_MS = 24 * 3600_000;
+
+/** Directory a session was started from: recorded by the hooks, else read from its conversation file. */
+export function launchDir(s: SessionRow): string | null {
+  if (s.project_dir) return s.project_dir;
+  for (const path of new Bun.Glob(`*/${s.id}.jsonl`).scanSync({ cwd: `${process.env.HOME}/.claude/projects`, absolute: true })) {
+    try {
+      const head = readFileSync(path, "utf8").slice(0, 256 * 1024);
+      for (const line of head.split("\n")) {
+        if (!line.includes('"cwd"')) continue;
+        const cwd = JSON.parse(line).cwd;
+        if (typeof cwd === "string") return cwd;
+      }
+    } catch {}
+  }
+  return s.cwd;
+}
+
+/**
+ * Brings an ended session back with `claude --resume`, in the directory it started from and with the same
+ * permission mode. Reuses a window tmux-resurrect restored under the same name, else opens a new one. Background
+ * sessions resume in the background.
+ */
+export function resume(s: SessionRow): { ok: boolean; message: string; pane?: string } {
+  if (s.state !== "ended") return { ok: true, message: `${displayName(s)} is already running`, pane: s.pane ?? undefined };
+  const cwd = launchDir(s);
+  if (!cwd) return { ok: false, message: "Could not find where that session was started." };
+  const flags = s.mode === "bypassPermissions" ? ["--dangerously-skip-permissions"] : [];
+  const name = displayName(s);
+  if (s.bg) {
+    const claude = Bun.which("claude") ?? "claude";
+    const p = Bun.spawnSync([claude, "--bg", ...flags, "--resume", s.id], { cwd, stdout: "pipe", stderr: "pipe" });
+    if (p.exitCode !== 0) return { ok: false, message: `${p.stderr}`.trim() || "claude --bg --resume failed." };
+    db.apply({ agent: s.agent, sessionId: s.id, state: "waiting", background: true });
+    return { ok: true, message: `resumed ${name} in the background` };
+  }
+  const command = windowCommand([...flags, "--resume", s.id]);
+  const taken = new Set(db.liveSessions().map((x) => x.pane).filter((p): p is string => !!p));
+  const restored = tmux.restoredShell(name, taken);
+  const pane = restored && tmux.respawn(restored, cwd, command) ? restored : tmux.newWindow({ cwd, name, command });
+  if (!pane) return { ok: false, message: "Could not open a tmux window (is tmux running?)." };
+  // Revive the row now; the resumed session's own hooks keep it current from here.
+  ingest({ agent: s.agent, sessionId: s.id, state: "waiting", pane, refreshTmux: true });
+  return { ok: true, message: `resumed ${name}`, pane };
+}
+
+/** Every session lost (not closed or exited) in the last day, oldest first so windows come back in order. */
+export function lostSessions(): SessionRow[] {
+  return db
+    .endedSessions(RESUME_LOST_WINDOW_MS)
+    .filter((s) => s.end_reason === "lost")
+    .reverse();
+}
+
+export function resumeLost(): { ok: boolean; message: string } {
+  const lost = lostSessions();
+  if (!lost.length) return { ok: true, message: "nothing lost to resume" };
+  const failed = lost.map(resume).filter((r) => !r.ok);
+  return failed.length
+    ? { ok: false, message: `resumed ${lost.length - failed.length} of ${lost.length}; ${failed[0].message}` }
+    : { ok: true, message: `resumed ${lost.length} session${lost.length === 1 ? "" : "s"}` };
 }

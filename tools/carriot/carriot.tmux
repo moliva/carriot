@@ -21,3 +21,6 @@ bind A run-shell "TMUX_PANE=#{pane_id} ~/carriot/bin/carriot new"
 
 # prefix X: close the agent in the current pane and the pane itself (conversation stays resumable).
 bind X confirm-before -p "close this agent and its pane? (y/n)" "run-shell 'TMUX_PANE=#{pane_id} ~/carriot/bin/carriot close'"
+
+# prefix R: after a crash or reboot, reopen every session lost in the last day (claude --resume).
+bind R confirm-before -p "resume every session lost in the last day? (y/n)" "run-shell 'TMUX_PANE=#{pane_id} ~/carriot/bin/carriot resume --lost'"

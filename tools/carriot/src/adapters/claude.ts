@@ -76,6 +76,7 @@ export function adapt(h: ClaudeHook, env: Record<string, string | undefined> = p
     background: env.CLAUDE_CODE_SESSION_KIND === "bg" || undefined,
     mode: h.permission_mode,
     title: h.session_title || undefined,
+    projectDir: env.CLAUDE_PROJECT_DIR || undefined,
   };
 
   switch (h.hook_event_name) {
@@ -160,8 +161,13 @@ export function adapt(h: ClaudeHook, env: Record<string, string | undefined> = p
       };
     }
 
-    case "SessionEnd":
-      return { event: { ...base, state: "ended" } };
+    case "SessionEnd": {
+      // Only a deliberate exit counts as exited; a hangup, kill or shutdown (reason "other") means it was lost.
+      const reason = h.reason ?? "other";
+      const endReason =
+        reason === "prompt_input_exit" || reason === "logout" ? "exited" : reason === "clear" || reason === "resume" ? "clear" : "lost";
+      return { event: { ...base, state: "ended", endReason } };
+    }
   }
   return {};
 }

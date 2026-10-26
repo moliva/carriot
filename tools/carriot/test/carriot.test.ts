@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -255,5 +255,65 @@ describe("aging", () => {
       core.sorted(order).map((s) => s.id).filter((id) => id === "age-wait-2h" || id === "age-wait-5h");
     expect(pick("oldest")).toEqual(["age-wait-5h", "age-wait-2h"]);
     expect(pick("newest")).toEqual(["age-wait-2h", "age-wait-5h"]);
+  });
+});
+
+describe("resume", () => {
+  test("SessionEnd records why the session ended, and the launch directory sticks", () => {
+    const end = adapt({ session_id: "r-1", hook_event_name: "SessionEnd", reason: "prompt_input_exit" }, { CLAUDE_PROJECT_DIR: "/proj" });
+    expect(end.event).toMatchObject({ state: "ended", endReason: "exited", projectDir: "/proj" });
+    expect(adapt({ session_id: "r-1", hook_event_name: "SessionEnd", reason: "clear" }, {}).event?.endReason).toBe("clear");
+    expect(adapt({ session_id: "r-1", hook_event_name: "SessionEnd", reason: "other" }, {}).event?.endReason).toBe("lost");
+    expect(adapt({ session_id: "r-1", hook_event_name: "SessionEnd" }, {}).event?.endReason).toBe("lost");
+  });
+
+  test("ended rows keep their reason until revived; /clear ones are not offered", () => {
+    db.apply({ agent: "claude", sessionId: "r-exit", state: "ended", endReason: "exited", projectDir: "/p" });
+    db.apply({ agent: "claude", sessionId: "r-clear", state: "ended", endReason: "clear" });
+    db.apply({ agent: "claude", sessionId: "r-lost", state: "working" });
+    db.markEnded(["r-lost"], "lost");
+    const ids = db.endedSessions(3600_000).map((s) => s.id);
+    expect(ids).toContain("r-exit");
+    expect(ids).toContain("r-lost");
+    expect(ids).not.toContain("r-clear");
+    expect(db.getSession("r-exit")).toMatchObject({ end_reason: "exited", project_dir: "/p" });
+    db.apply({ agent: "claude", sessionId: "r-exit", state: "waiting" });
+    expect(db.getSession("r-exit")).toMatchObject({ state: "waiting", end_reason: null, project_dir: "/p" });
+  });
+
+  test("a late exit hook does not overwrite a recorded close", () => {
+    db.apply({ agent: "claude", sessionId: "r-closing", state: "working" });
+    db.markEnded(["r-closing"], "closed");
+    db.apply({ agent: "claude", sessionId: "r-closing", state: "ended", endReason: "lost" });
+    expect(db.getSession("r-closing")?.end_reason).toBe("closed");
+  });
+
+  test("markEnded never overwrites how an already-ended session ended", () => {
+    db.apply({ agent: "claude", sessionId: "r-closed", state: "working" });
+    db.markEnded(["r-closed"], "closed");
+    db.markEnded(["r-closed"], "lost");
+    expect(db.getSession("r-closed")?.end_reason).toBe("closed");
+  });
+
+  test("only lost sessions are resumed in bulk, oldest first", () => {
+    const lost = core.lostSessions().map((s) => s.id);
+    expect(lost).toContain("r-lost");
+    expect(lost).not.toContain("r-closed");
+    expect(lost).not.toContain("r-exit");
+  });
+
+  test("launch directory falls back to the conversation file", () => {
+    const home = mkdtempSync(join(tmpdir(), "carriot-home-"));
+    const projects = join(home, ".claude/projects/-work");
+    mkdirSync(projects, { recursive: true });
+    writeFileSync(join(projects, "r-file.jsonl"), `${JSON.stringify({ type: "user", cwd: "/work/root" })}\n`);
+    db.apply({ agent: "claude", sessionId: "r-file", state: "working", cwd: "/work/root/sessions/X/repo" });
+    const prev = process.env.HOME;
+    process.env.HOME = home;
+    try {
+      expect(core.launchDir(db.getSession("r-file")!)).toBe("/work/root");
+    } finally {
+      process.env.HOME = prev;
+    }
   });
 });

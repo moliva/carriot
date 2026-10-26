@@ -25,7 +25,10 @@ const TAB_NAME: Record<Tab, string> = { overview: "overview", plan: "plan", pr: 
 
 const kind = (s: SessionRow) =>
   BLOCKED.includes(s.state) ? "blocked" : s.state === "waiting" ? "waiting" : s.mode === "plan" ? "planning" : "working";
-const tint = (s: SessionRow) => ({ blocked: A.red, waiting: A.amber, planning: A.blue, working: A.green })[kind(s)];
+const tint = (s: SessionRow) =>
+  s.state === "ended" ? A.grey : { blocked: A.red, waiting: A.amber, planning: A.blue, working: A.green }[kind(s)];
+const ended = (s: SessionRow) => s.state === "ended";
+const DAY = 24 * 3600_000;
 
 /** Idle sessions show when they were last active; active ones how long they have been in their state. */
 const ageOf = (s: SessionRow) => (isStale(s) ? s.updated_at : s.state_since);
@@ -35,6 +38,10 @@ function ageTint(ts: number): string {
   const ms = Date.now() - ts;
   return ms < 2 * 3600_000 ? `${A.bold}` : ms < 24 * 3600_000 ? "" : `${A.grey}${A.dim}`;
 }
+
+/** "lost" sessions vanished without exiting (crash, reboot, killed window); the others ended on purpose. */
+const endedLabel = (s: SessionRow) =>
+  ({ lost: "lost", closed: "closed", exited: "exited" })[s.end_reason as "lost" | "closed" | "exited"] ?? "ended";
 
 const idleLabel = () => {
   const h = Math.round(STALE_AFTER_MS / 3600_000);
@@ -122,6 +129,10 @@ let follow = true;
 let replying: string | null = null;
 let composing: string | null = null;
 let confirmClose: string | null = null;
+let confirmResumeLost = false;
+/** Resumable ended sessions: by default only ones lost in the last day; `e` shows everything ended in the last week. */
+let endedRows: SessionRow[] = [];
+let showWeekOfEnded = false;
 /** Active `/` filter query; null when not filtering. */
 let filter: string | null = null;
 let order: core.SortOrder = "oldest";
@@ -134,7 +145,9 @@ const logCache = new Map<string, { at: number; text: string | null }>();
 const out = process.stdout;
 const cols = () => out.columns ?? 120;
 const rows = () => out.rows ?? 40;
-const selected = () => sessions.find((s) => s.id === selectedId) ?? null;
+/** Live sessions in display order, then ended ones (most recently ended first). */
+const allRows = () => [...sessions, ...endedRows];
+const selected = () => allRows().find((s) => s.id === selectedId) ?? null;
 
 /** Short identifying fields match fuzzily; status and reply text only match the words as typed. */
 function matchScore(s: SessionRow, query: string): number | null {
@@ -149,8 +162,8 @@ function matchScore(s: SessionRow, query: string): number | null {
 
 /** Sessions the list shows: all of them, or the ones matching the `/` filter. */
 function visibleSessions(): SessionRow[] {
-  if (!filter?.trim()) return sessions;
-  return sessions.filter((s) => matchScore(s, filter!) !== null);
+  if (!filter?.trim()) return allRows();
+  return allRows().filter((s) => matchScore(s, filter!) !== null);
 }
 
 /** Moves the selection to the best match whenever the query changes or the selection drops out of the results. */
@@ -158,7 +171,7 @@ function selectBestMatch() {
   if (!filter?.trim()) return;
   let best: SessionRow | null = null;
   let bestScore = -Infinity;
-  for (const s of sessions) {
+  for (const s of allRows()) {
     const score = matchScore(s, filter);
     if (score !== null && score > bestScore) {
       best = s;
@@ -178,7 +191,7 @@ function defaultTab(s: SessionRow): Tab {
 function available(s: SessionRow, t: Tab): boolean {
   if (t === "plan") return !!db.latestArtifact(s.id, "plan");
   if (t === "pr") return !!db.latestArtifact(s.id, "pr");
-  if (t === "screen") return !!s.pane || !!s.bg;
+  if (t === "screen") return !ended(s) && (!!s.pane || !!s.bg);
   return true;
 }
 
@@ -194,6 +207,7 @@ function refresh(force = false) {
   lastVersion = v;
   const before = selected();
   sessions = core.sorted(order).filter((s) => s.pane !== process.env.TMUX_PANE);
+  endedRows = showWeekOfEnded ? db.endedSessions(7 * DAY) : core.lostSessions().reverse();
   if (!selected()) selectedId = sessions[0]?.id ?? null;
   if (filter?.trim() && !visibleSessions().some((x) => x.id === selectedId)) selectBestMatch();
   const s = selected();
@@ -221,10 +235,16 @@ function listLines(width: number, height: number): string[] {
   const lines: string[] = [];
   let selLine = 0;
   const groups: [string, (s: SessionRow) => boolean][] = [
-    ["NEEDS YOU", (s) => !isStale(s) && kind(s) === "blocked"],
-    ["YOUR TURN", (s) => !isStale(s) && kind(s) === "waiting"],
-    ["WORKING", (s) => !isStale(s) && (kind(s) === "working" || kind(s) === "planning")],
-    [`IDLE · no activity for ${idleLabel()}+`, (s) => isStale(s)],
+    ["NEEDS YOU", (s) => !ended(s) && !isStale(s) && kind(s) === "blocked"],
+    ["YOUR TURN", (s) => !ended(s) && !isStale(s) && kind(s) === "waiting"],
+    ["WORKING", (s) => !ended(s) && !isStale(s) && (kind(s) === "working" || kind(s) === "planning")],
+    [`IDLE · no activity for ${idleLabel()}+`, (s) => !ended(s) && isStale(s)],
+    [
+      showWeekOfEnded
+        ? "ENDED · last week · enter resumes · e shows only lost"
+        : "LOST · last day · enter resumes one, R all · e shows everything ended",
+      ended,
+    ],
   ];
   for (const [title, match] of groups) {
     const items = visibleSessions().filter(match);
@@ -236,19 +256,22 @@ function listLines(width: number, height: number): string[] {
       const sel = s.id === selectedId;
       if (sel) selLine = lines.length;
       const bg = sel ? A.selBg : "";
-      const idle = isStale(s);
+      const gone = ended(s);
+      const idle = gone || isStale(s);
       const dot = idle ? `${A.dim}${tint(s)}` : tint(s);
-      const marker = sel ? `${tint(s)}▌` : " ";
-      const age = core.ago(ageOf(s));
+      const marker = sel ? `${gone ? A.amber : tint(s)}▌` : " ";
+      const ts = gone ? (s.ended_at ?? s.updated_at) : ageOf(s);
+      const age = core.ago(ts);
       const nameMax = Math.max(4, width - age.length - 5);
       const where = core.location(s);
       const tag = where ? ` ${WHERE[where]}` : "";
       const name = fit(core.displayName(s), Math.max(4, nameMax - Bun.stringWidth(tag)), bg).trimEnd();
       lines.push(
-        `${bg}${marker}${A.reset}${bg}${dot}●${A.reset}${bg} ${idle ? A.grey : A.bold}${fit(`${name}${A.reset}${bg}${A.grey}${tag}`, nameMax, bg)}${A.reset}${bg} ${ageTint(ageOf(s))}${age}${A.reset}${bg} ${A.reset}`,
+        `${bg}${marker}${A.reset}${bg}${dot}${gone ? "✕" : "●"}${A.reset}${bg} ${idle ? A.grey : A.bold}${fit(`${name}${A.reset}${bg}${A.grey}${tag}`, nameMax, bg)}${A.reset}${bg} ${ageTint(ts)}${age}${A.reset}${bg} ${A.reset}`,
       );
       const detail = s.detail ? ` · ${s.detail.replace(/\s+/g, " ")}` : "";
-      lines.push(fit(`${bg}${marker}${A.reset}${bg}   ${idle ? A.grey : tint(s)}${label(s)}${A.reset}${bg}${A.grey}${detail}`, width, bg));
+      const status = gone ? endedLabel(s) : label(s);
+      lines.push(fit(`${bg}${marker}${A.reset}${bg}   ${gone && s.end_reason === "lost" ? A.amber : idle ? A.grey : tint(s)}${status}${A.reset}${bg}${A.grey}${detail}`, width, bg));
     }
   }
   if (sessions.length && !visibleSessions().length) lines.push("", ` ${A.grey}No sessions match /${filter}${A.reset}`, ` ${A.grey}esc clears the filter${A.reset}`);
@@ -304,7 +327,9 @@ function detailLines(width: number, height: number): string[] {
   const s = selected();
   if (!s) return [];
   const head = [
-    `${A.bold}${core.displayName(s)}${A.reset}  ${tint(s)}${A.bold}${label(s)}${A.reset} ${A.grey}for ${core.ago(s.state_since)}${A.reset}`,
+    ended(s)
+      ? `${A.bold}${core.displayName(s)}${A.reset}  ${s.end_reason === "lost" ? A.amber : A.grey}${A.bold}${endedLabel(s)}${A.reset} ${A.grey}${core.ago(s.ended_at ?? s.updated_at)} ago · enter resumes${A.reset}`
+      : `${A.bold}${core.displayName(s)}${A.reset}  ${tint(s)}${A.bold}${label(s)}${A.reset} ${A.grey}for ${core.ago(s.state_since)}${A.reset}`,
     `${A.grey}${[s.agent, (s.cwd ?? "").replace(/^\/Users\/[^/]+/, "~"), s.tmux_target, s.mode && s.mode !== "default" ? `mode ${s.mode}` : null, s.id.slice(0, 8)].filter(Boolean).join(" · ")}${A.reset}`,
     TABS.map((t, i) => {
       const on = available(s, t);
@@ -329,7 +354,8 @@ function detailLines(width: number, height: number): string[] {
 function header(width: number): string {
   const count = { blocked: 0, waiting: 0, working: 0, idle: 0 };
   for (const s of sessions) count[isStale(s) ? "idle" : kind(s) === "planning" ? "working" : (kind(s) as keyof typeof count)]++;
-  const left = ` ${A.bold}CARRIOT REINS${A.reset}   ${A.red}● ${count.blocked} need you${A.reset}   ${A.amber}● ${count.waiting} your turn${A.reset}   ${A.green}● ${count.working} working${A.reset}   ${A.grey}○ ${count.idle} idle${A.reset}`;
+  const lost = core.lostSessions().length;
+  const left = ` ${A.bold}CARRIOT REINS${A.reset}   ${A.red}● ${count.blocked} need you${A.reset}   ${A.amber}● ${count.waiting} your turn${A.reset}   ${A.green}● ${count.working} working${A.reset}   ${A.grey}○ ${count.idle} idle${A.reset}${lost ? `   ${A.amber}${A.bold}↻ ${lost} lost · R resumes all${A.reset}` : ""}`;
   const clock = `${A.grey}${order === "oldest" ? "longest waiting first" : "most recent first"} · ${A.reset}${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
   return fit(`${left}${" ".repeat(Math.max(1, width - visible(left) - visible(clock) - 1))}${A.grey}${clock}${A.reset}`, width);
 }
@@ -341,6 +367,10 @@ function footer(width: number): string {
       `${A.inverse} / ${A.reset} ${A.bold}${filter}${A.reset}${A.inverse} ${A.reset}  ${A.grey}${n} match${n === 1 ? "" : "es"} · enter jump · ↑↓ ^n/^p move · ^u clear · esc done${A.reset}`,
       width,
     );
+  }
+  if (confirmResumeLost) {
+    const n = core.lostSessions().length;
+    return fit(`${A.inverse}${A.amber} resume ${A.reset} ${A.bold}${n} lost session${n === 1 ? "" : "s"}${A.reset} ${A.grey}from the last day in new windows?${A.reset}  ${A.bold}y${A.reset} ${A.grey}resume · any other key cancels${A.reset}`, width);
   }
   const closing = confirmClose ? sessions.find((x) => x.id === confirmClose) : null;
   if (closing)
@@ -354,7 +384,7 @@ function footer(width: number): string {
   if (flash && flash.until > Date.now()) return fit(` ${A.bold}${flash.text}${A.reset}`, width);
   const keys = [
     ["j/k ^n/^p", "move"], ["/", "find"], ["s", "sort"], ["enter", "open"], ["n", "next waiting"], ["1-4", "tabs"], ["J/K ^d/^u", "scroll"],
-    ["r", "reply"], ["p", "park"], ["a", "new"], ["x", "close"], ["o", "web"], ["q", "quit"],
+    ["r", "reply"], ["p", "park"], ["a", "new"], ["x", "close"], ["R", "resume lost"], ["o", "web"], ["q", "quit"],
   ];
   return fit(` ${keys.map(([k, v]) => `${A.bold}${k}${A.reset} ${A.grey}${v}${A.reset}`).join("  ")}`, width);
 }
@@ -396,6 +426,14 @@ function move(delta: number) {
 
 function jump(s: SessionRow | null) {
   if (!s) return;
+  if (ended(s)) {
+    const r = core.resume(s);
+    if (!r.ok) return say(r.message);
+    if (r.pane) tmux.jump(r.pane, false);
+    else say(r.message);
+    refresh(true);
+    return;
+  }
   const r = core.reconnect(s);
   if (r.error || !r.pane) return say(r.error ?? "Could not reach that session.");
   tmux.jump(r.pane, false);
@@ -425,6 +463,14 @@ function onKey(key: string) {
     } else if (key >= " " && !key.startsWith("\x1b")) {
       filter += key;
       selectBestMatch();
+    }
+    return;
+  }
+  if (confirmResumeLost) {
+    confirmResumeLost = false;
+    if (key === "y") {
+      say(core.resumeLost().message);
+      refresh(true);
     }
     return;
   }
@@ -525,11 +571,21 @@ function onKey(key: string) {
       return;
     }
     case "p":
+      if (selected() && ended(selected()!)) return say("That session has ended; enter resumes it.");
       return toggleAway(selected());
     case "a":
       composing = "";
       return;
+    case "R":
+      if (core.lostSessions().length) confirmResumeLost = true;
+      else say("Nothing lost in the last day.");
+      return;
+    case "e":
+      showWeekOfEnded = !showWeekOfEnded;
+      refresh(true);
+      return say(showWeekOfEnded ? "Showing every session ended in the last week" : "Showing only sessions lost in the last day");
     case "x":
+      if (selected() && ended(selected()!)) return say("That session has already ended.");
       confirmClose = selected()?.id ?? null;
       return;
     case "o": {
