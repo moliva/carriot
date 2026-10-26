@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { adapt as claude } from "./adapters/claude";
@@ -463,9 +463,7 @@ try {
 } catch (err) {
   // A hook must never break the agent it observes.
   if (process.argv[2] === "hook") {
-    try {
-      appendFileSync(join(dirname(db.DB_PATH), "errors.log"), `${new Date().toISOString()} ${(err as Error)?.stack ?? err}\n`);
-    } catch {}
+    core.logError(err);
     process.exit(0);
   }
   throw err;

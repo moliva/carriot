@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import * as db from "./db";
 import * as tmux from "./tmux";
 import { isStale, urgency, type AdapterResult, type AgentEvent, type SessionRow } from "./types";
@@ -18,11 +19,28 @@ export function ingest(ev: AgentEvent) {
   }
 }
 
+export function logError(err: unknown) {
+  try {
+    appendFileSync(join(dirname(db.DB_PATH), "errors.log"), `${new Date().toISOString()} ${(err as Error)?.stack ?? err}\n`);
+  } catch {}
+}
+
 export function handle(agent: string, raw: string, adapt: (payload: any) => AdapterResult): unknown {
+  if (!raw.trim()) return;
   const payload = JSON.parse(raw);
   if (process.env.CARRIOT_DEBUG) db.logRaw(agent, payload.session_id, payload.hook_event_name, raw);
   const { event, response } = adapt(payload);
-  if (event) ingest(event);
+  if (!event) return response;
+  if (!response) {
+    ingest(event);
+    return;
+  }
+  // A failed write must not swallow the response: the PR gate's "ask" has to reach the agent.
+  try {
+    ingest(event);
+  } catch (err) {
+    logError(err);
+  }
   return response;
 }
 

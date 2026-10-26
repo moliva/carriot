@@ -317,3 +317,22 @@ describe("resume", () => {
     }
   });
 });
+
+describe("hook entry", () => {
+  test("empty stdin is ignored", () => {
+    expect(core.handle("claude", "", (p) => adapt(p, env))).toBeUndefined();
+    expect(core.handle("claude", " \n", (p) => adapt(p, env))).toBeUndefined();
+  });
+
+  test("the PR gate still asks when the store write fails", () => {
+    const broken = { agent: null, sessionId: "gate-broken", state: "pr_review" } as any;
+    const ask = { hookSpecificOutput: { permissionDecision: "ask" } };
+    expect(core.handle("claude", "{}", () => ({ event: broken, response: ask }))).toBe(ask);
+    expect(db.getSession("gate-broken")).toBeNull();
+  });
+
+  test("store failures without a response still surface", () => {
+    const broken = { agent: null, sessionId: "plain-broken", state: "working" } as any;
+    expect(() => core.handle("claude", "{}", () => ({ event: broken }))).toThrow();
+  });
+});

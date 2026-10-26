@@ -152,7 +152,7 @@ export function apply(ev: AgentEvent, tmux: TmuxInfo = {}): { prev: SessionRow |
       }
     }
     return { prev, next: getSession(ev.sessionId) };
-  })();
+  }).immediate();
 }
 
 /** Overwrites tmux placement (pane may move between windows and sessions, or detach entirely). */
