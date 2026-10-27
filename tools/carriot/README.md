@@ -16,6 +16,12 @@ Agent hooks call `bin/carriot hook <agent>`. An adapter (`src/adapters/<agent>.t
 
 Agents without an adapter can push states directly: `carriot emit --agent pi --session <id> --state waiting --detail "…"`.
 
+## Dashboard app
+
+`carriot app install` builds **Carriot.app** into `~/Applications`: the dashboard in its own window, with a Dock and ⌘-Tab entry and the carriot icon. It is a small Swift program (`app/Carriot.swift`, compiled with the Xcode Swift compiler, no dependencies) around a web view. It starts the dashboard server when needed, retries while the server restarts, opens PR and ticket links in your browser, and keeps running when its window is closed (click the Dock icon to bring it back). Rerun `carriot app install` after changes to the Swift file.
+
+`carriot open` (⌘⇧O, `prefix O`, `o` in reins) opens the dashboard on the session in the pane you are in. With the app installed it sends `carriot://focus/<session>`, which brings the one Carriot window forward on that session instead of opening a new window; without it, it opens a browser window as before.
+
 ## Tickets and PRs
 
 Each session shows what it is working on: the ticket (from its `sessions/<TICKET>/` folder or a Linear-style branch), the branch, and the PR with its CI and review state. Reins puts a badge on each row (`#9936 ✓ approved`, `#9668 ✗`, `#9939 … changes`) and a ticket and PR line in the detail pane; the dashboard shows the same, and `/` finds sessions by ticket or PR number. Review sessions (`sessions/review-<repo>#<n>/`) show the PR under review. When an agent has wandered back to the hub root, the last session folder in its conversation is used.
@@ -67,7 +73,7 @@ Jumping to either (`enter`, `carriot jump`, `carriot next`) reconnects first: a 
 
 Hooks live in `carriot/.claude/settings.json`. All except the Bash PR gate run with `async: true`, so they never slow the agent. `hook-pr-gate` exits in bash unless the command contains `gh pr create`.
 
-tmux: everything lives in `carriot.tmux`. It appends the state dot to your existing window formats and binds `prefix T` (reins), `prefix F` (picker popup), `prefix b` (jump to the session waiting longest), `prefix P` (park), `prefix A` (new agent), `prefix X` (close agent and pane, asks first), `prefix R` (resume lost sessions, asks first) and `prefix G` (cheatsheet; also `carriot help`). Load it at the end of `~/.tmux.conf`:
+tmux: everything lives in `carriot.tmux`. It appends the state dot to your existing window formats and binds `prefix O` (dashboard on the current session), `prefix T` (reins), `prefix F` (picker popup), `prefix b` (jump to the session waiting longest), `prefix P` (park), `prefix A` (new agent), `prefix X` (close agent and pane, asks first), `prefix R` (resume lost sessions, asks first) and `prefix G` (cheatsheet; also `carriot help`). Load it at the end of `~/.tmux.conf`:
 
 ```tmux
 source-file -q ~/carriot/tools/carriot/carriot.tmux

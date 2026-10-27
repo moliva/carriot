@@ -7,7 +7,6 @@ local wezterm = require("wezterm")
 local M = {}
 
 local path = os.getenv("HOME") .. "/carriot/tools/carriot/carriot.wezterm.lua"
-local bin = os.getenv("HOME") .. "/carriot/bin/carriot"
 
 ---@param config table the wezterm config table
 ---@param keys table the dotfiles keys helper (provides tmux_prefixed_key)
@@ -28,14 +27,8 @@ function M.apply(config, keys)
     { mods = "CMD|SHIFT", key = "w", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "x" }) },
     -- cheatsheet
     { mods = "CMD", key = "/", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "g" }) },
-    -- web dashboard (runs directly, no tmux needed)
-    {
-      mods = "CMD|SHIFT",
-      key = "o",
-      action = wezterm.action_callback(function()
-        wezterm.background_child_process({ bin, "open" })
-      end),
-    },
+    -- dashboard on the current session (goes through tmux so carriot knows which pane you are in)
+    { mods = "CMD|SHIFT", key = "o", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "o" }) },
   }
   config.keys = config.keys or {}
   for _, binding in ipairs(bindings) do
