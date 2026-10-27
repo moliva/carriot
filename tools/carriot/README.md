@@ -12,7 +12,7 @@ Agent hooks call `bin/carriot hook <agent>`. An adapter (`src/adapters/<agent>.t
 - **`carriot reins`**: full-screen view of every session, open in its own window: live session list, plan / PR preview / terminal tabs, jump and reply.
 - **`carriot pick`**: fzf popup with preview; jump, plan, PR preview, pane capture.
 - **`carriot next`**: jump to the session that has waited on you the longest.
-- **`carriot serve`**: local web dashboard with live updates, rendered plans, GitHub-style PR preview, and replies.
+- **`carriot serve`**: local web dashboard with live updates, rendered plans, GitHub-style PR preview, and replies. The PR preview has a file tree, syntax highlighting, expandable context, and line comments sent back to the agent as one review ("Request changes" declines a pending `gh pr create`).
 
 Agents without an adapter can push states directly: `carriot emit --agent pi --session <id> --state waiting --detail "…"`.
 

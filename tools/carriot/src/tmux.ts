@@ -190,8 +190,18 @@ export function capture(pane: string, lines = 80): string | null {
   return tmux("capture-pane", "-p", "-J", "-t", pane, "-S", `-${lines}`);
 }
 
-export function sendText(pane: string, text: string): boolean {
-  if (tmux("send-keys", "-t", pane, "-l", text) === null) return false;
+export function sendText(pane: string, text: string, opts: { escapeFirst?: boolean } = {}): boolean {
+  if (opts.escapeFirst) {
+    if (tmux("send-keys", "-t", pane, "Escape") === null) return false;
+    Bun.sleepSync(400);
+  }
+  if (text.includes("\n")) {
+    // Bracketed paste keeps a multi-line message in one prompt instead of submitting it line by line.
+    const buffer = `carriot-${process.pid}`;
+    const load = Bun.spawnSync(["tmux", "load-buffer", "-b", buffer, "-"], { stdin: new TextEncoder().encode(text), stderr: "ignore" });
+    if (load.exitCode !== 0 || tmux("paste-buffer", "-p", "-d", "-b", buffer, "-t", pane) === null) return false;
+    Bun.sleepSync(150);
+  } else if (tmux("send-keys", "-t", pane, "-l", text) === null) return false;
   return tmux("send-keys", "-t", pane, "Enter") !== null;
 }
 

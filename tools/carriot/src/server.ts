@@ -2,7 +2,8 @@ import { join } from "node:path";
 import * as core from "./core";
 import * as db from "./db";
 import * as tmux from "./tmux";
-import { isStale, label } from "./types";
+import { fileDiff } from "./pr";
+import { BLOCKED, isStale, label } from "./types";
 
 const PAGE = join(import.meta.dir, "../web/index.html");
 const RECONCILE_EVERY_MS = 10_000;
@@ -59,10 +60,15 @@ export function serve(port: number) {
         return json(snapshot());
       }
 
-      const art = url.pathname.match(/^\/api\/artifacts\/(\d+)$/);
+      const art = url.pathname.match(/^\/api\/artifacts\/(\d+)(\/diff)?$/);
       if (art) {
         const a = db.getArtifact(Number(art[1]));
-        return a ? json({ ...a, meta: a.meta ? JSON.parse(a.meta) : {} }) : json({ error: "not found" }, 404);
+        if (!a) return json({ error: "not found" }, 404);
+        const meta = a.meta ? JSON.parse(a.meta) : {};
+        if (!art[2]) return json({ ...a, meta });
+        const path = url.searchParams.get("path") ?? "";
+        const diff = fileDiff(a.diff ?? "", meta, path, url.searchParams.get("old") ?? path, Number(url.searchParams.get("context") ?? 3));
+        return diff ? json({ diff }) : json({ error: "context unavailable for this file" }, 404);
       }
 
       const m = url.pathname.match(/^\/api\/sessions\/([\w-]+)\/(screen|jump|send|park)$/);
@@ -83,9 +89,10 @@ export function serve(port: number) {
         return "error" in r && r.error ? json({ error: r.error }, 409) : json({ ok: true, message: "message" in r ? r.message : "Back in tmux." });
       }
       if (!s.pane) return json({ error: "Attach to the session first (Open in terminal), then reply." }, 409);
-      const body = (await req.json().catch(() => ({}))) as { text?: string };
+      const body = (await req.json().catch(() => ({}))) as { text?: string; reject?: boolean };
       if (!body.text?.trim()) return json({ error: "empty message" }, 400);
-      return json({ ok: tmux.sendText(s.pane, body.text) });
+      // Escape declines the pending approval prompt so the message lands as feedback, not as keystrokes in the dialog.
+      return json({ ok: tmux.sendText(s.pane, body.text, { escapeFirst: body.reject && BLOCKED.includes(s.state) }) });
     },
   });
   console.log(`carriot dashboard on http://127.0.0.1:${server.port}`);

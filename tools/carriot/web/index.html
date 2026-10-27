@@ -8,7 +8,9 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/css/diff2html.min.css">
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/js/diff2html-ui-slim.min.js"></script>
+<link id="hljs-light" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+<link id="hljs-dark" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css" disabled>
+<script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/js/diff2html-ui.min.js"></script>
 <style>
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f1f3f5; --border: #e3e6ea; --text: #1d2127; --muted: #69707a;
@@ -107,7 +109,40 @@ main { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 .commits li { padding: 6px 14px; border-top: 1px solid var(--border); } .commits li:first-child { border-top: 0; }
 .sha { font: 12px ui-monospace, Menlo, monospace; color: var(--muted); margin-right: 8px; }
 .pr-title { font-size: 22px; margin: 0 0 6px; font-weight: 600; }
-.d2h-wrapper { max-width: 100%; } .d2h-file-wrapper { border-radius: 8px; }
+.pr-head { max-width: 1100px; overflow-wrap: anywhere; }
+.files-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.files-bar .label { margin: 0 auto 0 0; }
+.files { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
+.files.no-tree { grid-template-columns: minmax(0, 1fr); } .files.no-tree .tree { display: none; }
+.tree { position: sticky; top: 0; max-height: calc(100vh - 210px); overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); padding: 6px 0; font-size: 12.5px; }
+.tree-dir { color: var(--muted); padding: 3px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tree-file { display: flex; align-items: center; width: 100%; gap: 6px; background: none; border: 0; text-align: left; padding: 3px 8px; }
+.tree-file:hover { background: var(--panel-2); } .tree-file.on { background: var(--blue-bg); }
+.tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-added .tree-name { color: var(--green); } .st-deleted .tree-name { color: var(--red); text-decoration: line-through; }
+.tree-stat, .tree-cm { font: 11px ui-monospace, Menlo, monospace; white-space: nowrap; } .tree-cm { color: var(--accent); }
+.add { color: var(--green); } .del { color: var(--red); }
+.file { margin-bottom: 16px; }
+.d2h-wrapper { max-width: 100%; } .d2h-file-wrapper { border-radius: 8px; margin-bottom: 0; }
+.file .d2h-file-header { position: sticky; top: 0; z-index: 3; }
+.file-actions { margin-left: auto; display: flex; gap: 6px; padding-left: 8px; } .file-actions .btn { padding: 1px 8px; font-size: 12px; }
+.d2h-code-line-ctn.hljs { background: transparent; }
+td.d2h-code-linenumber:not(.d2h-info), td.d2h-code-side-linenumber:not(.d2h-info):not(.d2h-code-side-emptyplaceholder) { cursor: pointer; }
+td.d2h-code-linenumber:not(.d2h-info):hover, td.d2h-code-side-linenumber:not(.d2h-info):not(.d2h-code-side-emptyplaceholder):hover { background: var(--blue-bg); color: var(--blue); }
+.expandable td.d2h-info { cursor: pointer; } .expandable td.d2h-info:hover { color: var(--accent); }
+.cm-row > td { padding: 8px 12px; background: var(--panel-2); white-space: normal; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; }
+.d2h-file-diff, .d2h-file-side-diff { container-type: inline-size; }
+.cm-box { max-width: min(760px, calc(100cqw - 32px)); position: sticky; left: 12px; }
+.cm-box.saved { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); padding: 6px 12px; }
+.cm-box.saved .md { max-width: none; }
+.cm-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+.cm-input { width: 100%; resize: vertical; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--bg); color: var(--text); font: inherit; }
+.cm-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.review-list { list-style: none; margin: 0 0 10px; padding: 0; font-size: 13px; }
+.review-list li { padding: 3px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link { background: none; border: 0; color: var(--accent); padding: 0; font: 12px ui-monospace, Menlo, monospace; }
+.muted { color: var(--muted); }
+.btn[disabled] { opacity: .5; cursor: default; }
 .reply { position: sticky; bottom: 0; background: var(--panel); border-top: 1px solid var(--border); padding: 10px 24px; display: flex; gap: 8px; }
 .reply textarea { flex: 1; resize: none; height: 38px; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--bg); color: var(--text); font: inherit; }
 .toast { position: fixed; bottom: 70px; right: 20px; background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
@@ -117,6 +152,9 @@ main { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
   aside { border-right: 0; border-bottom: 1px solid var(--border); max-height: 45vh; }
   .head, .body, .reply { padding-left: 16px; padding-right: 16px; }
   .actions { margin-left: 0; }
+}
+@media (max-width: 1000px) {
+  .files { grid-template-columns: minmax(0, 1fr); } .tree { display: none; }
 }
 </style>
 </head>
@@ -177,6 +215,9 @@ let renderedKey = "";
 let lastView = "";
 const prevKind = new Map();
 const artifactCache = new Map();
+// Rendered PR views by artifact id, reused across live updates so expanded context and open drafts survive.
+const prViews = new Map();
+const reviews = new Map();
 
 function renderList() {
   const groups = [["Needs you", "blocked"], ["Your turn", "waiting"], ["Working", null], ["Idle · no activity for a day", "idle"]];
@@ -273,7 +314,11 @@ async function renderMain(force = false) {
     const a = await artifact(s.artifacts.plan);
     body.append(md(a.body));
   } else if (tab === "pr") {
-    body.append(renderPr(await artifact(s.artifacts.pr)));
+    const id = s.artifacts.pr;
+    if (!prViews.has(id)) prViews.set(id, renderPr(await artifact(id), s.id));
+    const view = prViews.get(id);
+    view.refresh();
+    body.append(view);
   } else if (tab === "screen") {
     const pre = h("pre", { class: "screen" }, "loading…");
     body.append(pre);
@@ -282,29 +327,304 @@ async function renderMain(force = false) {
   if (keepScroll && tab !== "screen") body.scrollTop = scroll;
 }
 
-function renderPr(a) {
+
+const effectiveTheme = () => document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+function syncHljs() {
+  const dark = effectiveTheme() === "dark";
+  $("#hljs-light").disabled = dark;
+  $("#hljs-dark").disabled = !dark;
+}
+function themeChanged() {
+  syncHljs();
+  prViews.clear();
+  renderMain(true);
+}
+
+function reviewComments(id) {
+  if (!reviews.has(id)) {
+    let saved = [];
+    try { saved = JSON.parse(localStorage.getItem(`carriot-review-${id}`) || "[]"); } catch {}
+    reviews.set(id, Array.isArray(saved) ? saved : []);
+  }
+  return reviews.get(id);
+}
+const saveReview = (id) => { try { localStorage.setItem(`carriot-review-${id}`, JSON.stringify(reviews.get(id))); } catch {} };
+
+/** Splits a unified diff into files with their paths, status and line counts. */
+function diffFiles(diff) {
+  const files = [];
+  for (const chunk of diff.split(/^(?=diff --git )/m)) {
+    const head = chunk.match(/^diff --git a\/(.+?) b\/(.+)$/m);
+    if (!head) continue;
+    let add = 0, del = 0, inHunk = false;
+    for (const l of chunk.split("\n")) {
+      if (l.startsWith("@@")) inHunk = true;
+      else if (inHunk && l[0] === "+") add++;
+      else if (inHunk && l[0] === "-") del++;
+    }
+    const renamed = /^rename to /m.test(chunk);
+    files.push({
+      path: head[2], oldPath: head[1], diff: chunk, add, del,
+      status: /^new file mode/m.test(chunk) ? "added" : /^deleted file mode/m.test(chunk) ? "deleted" : renamed ? "renamed" : "modified",
+    });
+  }
+  return files;
+}
+
+function fileTree(files, counts, onPick) {
+  const root = { dirs: new Map(), files: [] };
+  files.forEach((f, i) => {
+    const parts = f.path.split("/");
+    let node = root;
+    for (const p of parts.slice(0, -1)) {
+      if (!node.dirs.has(p)) node.dirs.set(p, { dirs: new Map(), files: [] });
+      node = node.dirs.get(p);
+    }
+    node.files.push({ name: parts.at(-1), f, i });
+  });
+  const pad = (depth) => `padding-left:${depth * 12 + 8}px`;
+  const walk = (node, depth) => {
+    const out = [];
+    for (let [name, dir] of [...node.dirs].sort(([a], [b]) => a.localeCompare(b))) {
+      while (dir.dirs.size === 1 && !dir.files.length) {
+        const [[child, next]] = dir.dirs;
+        name += `/${child}`;
+        dir = next;
+      }
+      out.push(h("div", { class: "tree-dir", style: pad(depth), title: name }, `${name}/`), ...walk(dir, depth + 1));
+    }
+    for (const x of node.files.sort((a, b) => a.name.localeCompare(b.name)))
+      out.push(h("button", { class: `tree-file st-${x.f.status}`, style: pad(depth), title: x.f.path, "data-idx": x.i, onclick: () => onPick(x.i) },
+        h("span", { class: "tree-name" }, x.name),
+        counts[x.f.path] ? h("span", { class: "tree-cm", title: "pending comments" }, `💬${counts[x.f.path]}`) : null,
+        h("span", { class: "tree-stat" }, h("span", { class: "add" }, `+${x.f.add}`), " ", h("span", { class: "del" }, `−${x.f.del}`))));
+    return out;
+  };
+  return walk(root, 0);
+}
+
+/** Inserts a full-width row after `tr` (and after any comment rows already there), mirrored by a spacer in a split view. */
+function insertRow(fileEl, tr, content, cls) {
+  let anchor = tr;
+  while (anchor.nextElementSibling?.classList.contains("cm-row")) anchor = anchor.nextElementSibling;
+  const row = h("tr", { class: `cm-row ${cls}` }, h("td", { colspan: "2" }, content));
+  anchor.after(row);
+  const tbody = row.parentElement;
+  const other = [...fileEl.querySelectorAll(".d2h-file-side-diff tbody")].find((t) => t !== tbody);
+  if (other) {
+    const idx = [...tbody.rows].indexOf(row);
+    const spacer = h("tr", { class: "cm-spacer" }, h("td", { colspan: "2" }));
+    other.rows[idx - 1] ? other.rows[idx - 1].after(spacer) : other.prepend(spacer);
+    new ResizeObserver(() => { spacer.style.height = `${row.offsetHeight}px`; }).observe(row);
+    row.spacer = spacer;
+  }
+  return row;
+}
+const removeRow = (row) => { row.spacer?.remove(); row.remove(); };
+
+function findRow(fileEl, side, line) {
+  const sides = fileEl.querySelectorAll(".d2h-file-side-diff");
+  if (sides.length) {
+    for (const td of sides[side === "old" ? 0 : 1].querySelectorAll("td.d2h-code-side-linenumber"))
+      if (parseInt(td.textContent, 10) === line) return td.parentElement;
+    return null;
+  }
+  for (const td of fileEl.querySelectorAll("td.d2h-code-linenumber"))
+    if (parseInt(td.querySelector(side === "old" ? ".line-num1" : ".line-num2")?.textContent, 10) === line) return td.parentElement;
+  return null;
+}
+
+/** Which line a click on a line-number cell refers to, in either view. */
+function clickedLine(fileEl, td) {
+  if (td.classList.contains("d2h-code-side-linenumber")) {
+    const side = td.closest(".d2h-file-side-diff") === fileEl.querySelector(".d2h-file-side-diff") ? "old" : "new";
+    return { side, line: parseInt(td.textContent, 10) };
+  }
+  const n2 = parseInt(td.querySelector(".line-num2")?.textContent, 10);
+  return n2 ? { side: "new", line: n2 } : { side: "old", line: parseInt(td.querySelector(".line-num1")?.textContent, 10) };
+}
+
+function reviewMessage(a, list, general, pending) {
+  const parts = [pending
+    ? `Review of the PR preview "${a.title || "untitled"}". Don't open the PR yet: address this feedback, then try again.`
+    : `Review comments on the PR "${a.title || "untitled"}". Please address them.`];
+  if (general) parts.push(general);
+  list.forEach((c, i) => parts.push(`${i + 1}. ${c.file}:${c.line}${c.side === "old" ? " (removed line)" : ""}\n   > ${c.code.trim()}\n   ${c.text.replace(/\n/g, "\n   ")}`));
+  return parts.join("\n\n");
+}
+
+function renderPr(a, sessionId) {
   const m = a.meta || {};
-  const wrap = h("div", { class: "md", style: "max-width:none" });
-  wrap.append(
+  const files = diffFiles(a.diff || "");
+  const comments = reviewComments(a.id);
+  const canExpand = !!(m.baseSha && m.headSha);
+  let side = window.innerWidth > 1400;
+
+  const wrap = h("div", { class: "pr" });
+  wrap.append(h("div", { class: "pr-head" },
     h("div", { class: "pr-title" }, a.title || "(untitled)"),
     h("div", { class: "meta", style: "margin-bottom:16px" },
       m.url ? h("a", { href: m.url, target: "_blank", rel: "noopener" }, "Opened ↗") : h("strong", {}, m.draft ? "Draft · not created yet" : "Not created yet"),
       " · wants to merge ", h("span", { class: "branch" }, m.head || "?"), " into ", h("span", { class: "branch" }, m.base || "?"),
       m.repo ? ` · ${m.repo}` : "", m.stat ? ` · ${m.stat}` : ""),
     h("div", { class: "pr-card" }, h("div", { class: "h" }, h("strong", {}, "Description")), h("div", { class: "c" }, md(a.body || "_No description provided._"))),
-  );
-  if (m.commits?.length) wrap.append(h("div", { class: "pr-card" }, h("div", { class: "h" }, h("strong", {}, `${m.commits.length} commit${m.commits.length > 1 ? "s" : ""}`)),
-    h("ul", { class: "commits" }, m.commits.map((c) => h("li", {}, h("span", { class: "sha" }, c.slice(0, 7)), c.slice(8))))));
-  const toggle = h("button", { class: "btn", style: "margin-bottom:10px" }, "Unified view");
-  const diffEl = h("div");
-  let side = window.innerWidth > 1100;
-  const draw = () => {
-    toggle.textContent = side ? "Unified view" : "Split view";
-    new Diff2HtmlUI(diffEl, a.diff || "", { drawFileList: true, fileListToggle: true, fileContentToggle: true, matching: "lines", outputFormat: side ? "side-by-side" : "line-by-line", colorScheme: "auto", stickyFileHeaders: false }).draw();
+    m.commits?.length ? h("div", { class: "pr-card" }, h("div", { class: "h" }, h("strong", {}, `${m.commits.length} commit${m.commits.length > 1 ? "s" : ""}`)),
+      h("ul", { class: "commits" }, m.commits.map((c) => h("li", {}, h("span", { class: "sha" }, c.slice(0, 7)), c.slice(8))))) : null,
+  ));
+
+  // Review: pending line comments plus overall feedback, sent to the agent as one message.
+  const general = h("textarea", { class: "cm-input", rows: 2, placeholder: "Overall feedback (optional). Click a line number in the diff to comment on a line." });
+  const reviewTitle = h("strong");
+  const reviewList = h("ul", { class: "review-list" });
+  const sendBtn = h("button", { class: "btn primary" });
+  const drawReview = () => {
+    const s = sessions.find((x) => x.id === sessionId);
+    const pending = s?.state === "pr_review";
+    reviewTitle.textContent = comments.length ? `Review · ${comments.length} pending comment${comments.length > 1 ? "s" : ""}` : "Review";
+    reviewList.replaceChildren(...comments.map((c) => h("li", {},
+      h("button", { class: "link", onclick: () => jumpTo(c) }, `${c.file}:${c.line}`), " ", h("span", { class: "muted" }, c.text.split("\n")[0]))));
+    sendBtn.textContent = pending ? "Request changes" : "Send to agent";
+    sendBtn.title = pending ? "Declines the pending gh pr create and sends this review to the agent" : "Sends this review to the agent";
+    sendBtn.disabled = !comments.length && !general.value.trim();
+    drawTree();
   };
-  toggle.addEventListener("click", () => { side = !side; draw(); });
-  wrap.append(h("div", { class: "label" }, "Files changed"), toggle, diffEl);
-  if (a.diff) draw(); else diffEl.append(h("div", { class: "empty" }, "No diff captured."));
+  general.addEventListener("input", () => { sendBtn.disabled = !comments.length && !general.value.trim(); });
+  sendBtn.addEventListener("click", async () => {
+    const s = sessions.find((x) => x.id === sessionId);
+    if (!s?.pane) return toast("Attach to the session first (Open in terminal), then send.");
+    const pending = s.state === "pr_review";
+    try {
+      await api(`/api/sessions/${s.id}/send`, { method: "POST", body: JSON.stringify({ text: reviewMessage(a, comments, general.value.trim(), pending), reject: pending }) });
+      comments.length = 0;
+      saveReview(a.id);
+      general.value = "";
+      for (const row of wrap.querySelectorAll(".cm-row.saved")) removeRow(row);
+      drawReview();
+      toast("Review sent");
+    } catch (e) { toast(e.message); }
+  });
+  wrap.append(h("div", { class: "pr-card pr-head" }, h("div", { class: "h" }, reviewTitle), h("div", { class: "c", style: "padding-top:10px" }, reviewList, general,
+    h("div", { class: "cm-actions" }, sendBtn))));
+
+  // Files changed: tree on the left, one diff2html render per file so a file can be re-drawn alone.
+  const tree = h("nav", { class: "tree" });
+  const grid = h("div", { class: "files" });
+  const sections = files.map((f, i) => h("section", { class: `file ${canExpand ? "expandable" : ""}`, "data-idx": i }));
+  const drawTree = () => {
+    const counts = {};
+    for (const c of comments) counts[c.file] = (counts[c.file] || 0) + 1;
+    tree.replaceChildren(...fileTree(files, counts, (i) => sections[i].scrollIntoView({ block: "start" })));
+  };
+
+  const placeComment = (el, c) => {
+    const tr = findRow(el, c.side, c.line);
+    if (!tr) return;
+    let row;
+    const del = () => {
+      comments.splice(comments.indexOf(c), 1);
+      saveReview(a.id);
+      removeRow(row);
+      drawReview();
+    };
+    row = insertRow(el, tr, h("div", { class: "cm-box saved" },
+      h("div", { class: "cm-head" }, h("span", {}, `Pending · ${c.side === "old" ? "removed " : ""}line ${c.line}`), h("button", { class: "link", onclick: del }, "Delete")),
+      md(c.text)), "saved");
+    row.dataset.id = c.id;
+  };
+
+  const openComposer = (el, tr, draft) => {
+    const ta = h("textarea", { class: "cm-input", rows: 3, placeholder: `Comment on ${draft.file}:${draft.line} (⌘↩ to add, Esc to cancel)` });
+    let row;
+    const add = () => {
+      const text = ta.value.trim();
+      if (!text) return;
+      removeRow(row);
+      const c = { ...draft, id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text };
+      comments.push(c);
+      saveReview(a.id);
+      placeComment(el, c);
+      drawReview();
+    };
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); add(); }
+      if (e.key === "Escape") removeRow(row);
+    });
+    row = insertRow(el, tr, h("div", { class: "cm-box" }, ta,
+      h("div", { class: "cm-actions" }, h("button", { class: "btn", onclick: () => removeRow(row) }, "Cancel"), h("button", { class: "btn primary", onclick: add }, "Add comment"))), "composer");
+    ta.focus();
+  };
+
+  const expand = async (i, full) => {
+    const f = files[i];
+    const context = full ? 100000 : (f.context ?? 3) + 25;
+    try {
+      const r = await api(`/api/artifacts/${a.id}/diff?path=${encodeURIComponent(f.path)}&old=${encodeURIComponent(f.oldPath)}&context=${context}`);
+      Object.assign(f, { shown: r.diff, context, full });
+      drawFile(i);
+    } catch (e) { toast(e.message); }
+  };
+
+  const drawFile = (i) => {
+    const f = files[i], el = sections[i];
+    el.replaceChildren();
+    new Diff2HtmlUI(el, f.shown ?? f.diff, {
+      drawFileList: false, outputFormat: side ? "side-by-side" : "line-by-line", matching: "lines",
+      highlight: true, colorScheme: effectiveTheme(), fileContentToggle: true, stickyFileHeaders: false,
+    }).draw();
+    const header = el.querySelector(".d2h-file-header");
+    if (header && canExpand && !f.full && f.status !== "added" && f.status !== "deleted")
+      header.append(h("div", { class: "file-actions" },
+        h("button", { class: "btn", title: "Show 25 more lines around each change", onclick: () => expand(i, false) }, "Expand ↕"),
+        h("button", { class: "btn", title: "Show the whole file", onclick: () => expand(i, true) }, "Full file")));
+    for (const c of comments) if (c.file === f.path) placeComment(el, c);
+  };
+
+  sections.forEach((el, i) => el.addEventListener("click", (e) => {
+    if (e.target.closest(".cm-row")) return;
+    if (e.target.closest("td.d2h-info")) { if (canExpand && !files[i].full) expand(i, false); return; }
+    const td = e.target.closest("td.d2h-code-linenumber, td.d2h-code-side-linenumber");
+    if (!td || td.classList.contains("d2h-code-side-emptyplaceholder")) return;
+    const { side: where, line } = clickedLine(el, td);
+    if (!line) return;
+    const tr = td.parentElement;
+    if (tr.nextElementSibling?.classList.contains("composer")) return tr.nextElementSibling.querySelector("textarea").focus();
+    openComposer(el, tr, { file: files[i].path, side: where, line, code: tr.querySelector(".d2h-code-line-ctn")?.textContent ?? "" });
+  }));
+
+  const jumpTo = (c) => {
+    const i = files.findIndex((f) => f.path === c.file);
+    if (i < 0) return;
+    const row = sections[i].querySelector(`.cm-row[data-id="${c.id}"]`);
+    (row ?? sections[i]).scrollIntoView({ block: row ? "center" : "start" });
+  };
+
+  // Highlight the file currently at the top of the diff in the tree.
+  const seen = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) {
+      for (const b of tree.querySelectorAll(".tree-file.on")) b.classList.remove("on");
+      tree.querySelector(`.tree-file[data-idx="${e.target.dataset.idx}"]`)?.classList.add("on");
+    }
+  }, { rootMargin: "0px 0px -75% 0px" });
+  sections.forEach((el) => seen.observe(el));
+
+  const viewBtn = h("button", { class: "btn" });
+  const treeBtn = h("button", { class: "btn" }, "Hide files");
+  const drawAll = () => {
+    viewBtn.textContent = side ? "Unified view" : "Split view";
+    files.forEach((_, i) => drawFile(i));
+  };
+  viewBtn.addEventListener("click", () => { side = !side; drawAll(); });
+  treeBtn.addEventListener("click", () => { treeBtn.textContent = grid.classList.toggle("no-tree") ? "Show files" : "Hide files"; });
+
+  wrap.append(h("div", { class: "files-bar" },
+    h("div", { class: "label" }, `Files changed · ${files.length}`),
+    canExpand ? null : h("span", { class: "muted", style: "font-size:12px" }, "Captured before context expansion was available"),
+    treeBtn, viewBtn));
+  grid.append(tree, h("div", {}, ...sections));
+  wrap.append(files.length ? grid : h("div", { class: "empty" }, "No diff captured."));
+  if (files.length) drawAll();
+  drawReview();
+  wrap.refresh = drawReview;
   return wrap;
 }
 
@@ -354,8 +674,11 @@ $("#theme").addEventListener("click", () => {
   const next = cur === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
   try { localStorage.setItem("carriot-theme", next); } catch {}
+  themeChanged();
 });
 try { const t = localStorage.getItem("carriot-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", themeChanged);
+syncHljs();
 window.addEventListener("hashchange", () => { const id = decodeURIComponent(location.hash.slice(1)); if (id && id !== selected) select(id); });
 document.addEventListener("keydown", (e) => {
   if (e.target.tagName === "TEXTAREA") return;
