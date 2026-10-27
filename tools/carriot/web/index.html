@@ -113,6 +113,8 @@ main { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 .prompt { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 18px; white-space: pre-wrap; }
 .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 6px; }
 .screen { background: #0d1117; color: #d0d7de; border-radius: 8px; padding: 14px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.screen { --ansi-0: #484f58; --ansi-1: #ff7b72; --ansi-2: #3fb950; --ansi-3: #d29922; --ansi-4: #58a6ff; --ansi-5: #bc8cff; --ansi-6: #39c5cf; --ansi-7: #b1bac4;
+  --ansi-8: #6e7681; --ansi-9: #ffa198; --ansi-10: #56d364; --ansi-11: #e3b341; --ansi-12: #79c0ff; --ansi-13: #d2a8ff; --ansi-14: #56d4dd; --ansi-15: #f0f6fc; }
 .pr-card { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); margin-bottom: 18px; overflow: hidden; }
 .pr-card .h { padding: 10px 14px; background: var(--panel-2); border-bottom: 1px solid var(--border); font-size: 13px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .pr-card .c { padding: 4px 14px 14px; }
@@ -346,11 +348,65 @@ async function renderMain(force = false) {
   } else if (tab === "screen") {
     const pre = h("pre", { class: "screen" }, "loading…");
     body.append(pre);
-    api(`/api/sessions/${s.id}/screen?lines=150`).then((r) => { pre.textContent = r.text.replace(/\n+$/, ""); body.scrollTop = body.scrollHeight; }, (e) => { pre.textContent = e.message; });
+    api(`/api/sessions/${s.id}/screen?lines=150`).then((r) => { pre.replaceChildren(...ansiNodes(r.text.replace(/\s+$/, ""))); body.scrollTop = body.scrollHeight; }, (e) => { pre.textContent = e.message; });
   }
   if (keepScroll && tab !== "screen") body.scrollTop = scroll;
 }
 
+
+/** A terminal colour: 0-15 follow the .screen theme, 16-255 are the fixed xterm cube and greys, strings are truecolour. */
+function ansiColour(c) {
+  if (typeof c === "string") return c;
+  if (c < 16) return `var(--ansi-${c})`;
+  if (c >= 232) { const g = 8 + 10 * (c - 232); return `rgb(${g},${g},${g})`; }
+  const lv = [0, 95, 135, 175, 215, 255], n = c - 16;
+  return `rgb(${lv[Math.floor(n / 36)]},${lv[Math.floor(n / 6) % 6]},${lv[n % 6]})`;
+}
+
+/** Applies one SGR parameter list to the running attribute state. */
+function sgr(st, params) {
+  const p = params === "" ? [0] : params.split(/[;:]/).map((x) => Number(x) || 0);
+  st = { ...st };
+  for (let i = 0; i < p.length; i++) {
+    const n = p[i];
+    if (n === 0) st = {};
+    else if (n === 1) st.bold = true; else if (n === 2) st.dim = true; else if (n === 3) st.italic = true;
+    else if (n === 4) st.underline = true; else if (n === 7) st.inverse = true; else if (n === 9) st.strike = true;
+    else if (n === 22) st.bold = st.dim = false; else if (n === 23) st.italic = false; else if (n === 24) st.underline = false;
+    else if (n === 27) st.inverse = false; else if (n === 29) st.strike = false;
+    else if (n >= 30 && n <= 37) st.fg = n - 30; else if (n >= 90 && n <= 97) st.fg = n - 82; else if (n === 39) delete st.fg;
+    else if (n >= 40 && n <= 47) st.bg = n - 40; else if (n >= 100 && n <= 107) st.bg = n - 92; else if (n === 49) delete st.bg;
+    else if (n === 38 || n === 48) {
+      const key = n === 38 ? "fg" : "bg";
+      if (p[i + 1] === 5) { st[key] = p[i + 2]; i += 2; }
+      else if (p[i + 1] === 2) { st[key] = `rgb(${p[i + 2]},${p[i + 3]},${p[i + 4]})`; i += 4; }
+    }
+  }
+  return st;
+}
+
+/** Terminal text with SGR escapes as text and styled spans; other escapes are dropped. Never parses the text as HTML. */
+function ansiNodes(text) {
+  const out = [];
+  let st = {}, last = 0, m;
+  const push = (t) => {
+    if (!t) return;
+    let fg = st.fg != null ? ansiColour(st.fg) : null, bg = st.bg != null ? ansiColour(st.bg) : null;
+    if (st.inverse) [fg, bg] = [bg ?? "#0d1117", fg ?? "#d0d7de"];
+    const css = [fg && `color:${fg}`, bg && `background:${bg}`, st.bold && "font-weight:600", st.dim && "opacity:.6",
+      st.italic && "font-style:italic", (st.underline || st.strike) && `text-decoration:${[st.underline && "underline", st.strike && "line-through"].filter(Boolean).join(" ")}`]
+      .filter(Boolean).join(";");
+    out.push(css ? h("span", { style: css }, t) : document.createTextNode(t));
+  };
+  const re = /\x1b\[([0-9;:]*)m|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-9;?<>=]*[ -\/]*[@-~]|\x1b[@-_]/g;
+  while ((m = re.exec(text))) {
+    push(text.slice(last, m.index));
+    last = re.lastIndex;
+    if (m[1] !== undefined) st = sgr(st, m[1]);
+  }
+  push(text.slice(last));
+  return out;
+}
 
 const effectiveTheme = () => document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 function syncHljs() {

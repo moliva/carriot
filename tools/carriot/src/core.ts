@@ -217,9 +217,9 @@ export function close(s: SessionRow): { ok: boolean; message: string } {
   return { ok: true, message: `closed ${displayName(s)}` };
 }
 
-/** Recent terminal output: the live pane, or `claude logs` for a detached background session. */
-export function screen(s: SessionRow, lines = 200): string | null {
-  if (s.pane) return tmux.capture(s.pane, lines);
+/** Recent terminal output: the live pane (with SGR escapes if `ansi`), or `claude logs` for a detached background session. */
+export function screen(s: SessionRow, lines = 200, ansi = false): string | null {
+  if (s.pane) return tmux.capture(s.pane, lines, ansi);
   if (!s.bg) return null;
   const claude = Bun.which("claude");
   if (!claude) return null;

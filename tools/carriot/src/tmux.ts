@@ -200,8 +200,9 @@ export function jump(pane: string, focusTerminal: boolean) {
   }
 }
 
-export function capture(pane: string, lines = 80): string | null {
-  return tmux("capture-pane", "-p", "-J", "-t", pane, "-S", `-${lines}`);
+/** Recent pane text; `escapes` keeps the SGR colour/attribute sequences tmux otherwise strips. */
+export function capture(pane: string, lines = 80, escapes = false): string | null {
+  return tmux("capture-pane", "-p", "-J", ...(escapes ? ["-e"] : []), "-t", pane, "-S", `-${lines}`);
 }
 
 export function sendText(pane: string, text: string, opts: { escapeFirst?: boolean } = {}): boolean {

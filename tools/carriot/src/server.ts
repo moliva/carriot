@@ -87,7 +87,7 @@ export function serve(port: number) {
       const s = db.getSession(m[1]);
       if (!s) return json({ error: "session not found" }, 404);
 
-      if (m[2] === "screen") return json({ text: core.screen(s, Number(url.searchParams.get("lines") ?? 120)) ?? "" });
+      if (m[2] === "screen") return json({ text: core.screen(s, Number(url.searchParams.get("lines") ?? 120), true) ?? "" });
       if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
       if (m[2] === "jump") {
         const r = core.reconnect(s);
