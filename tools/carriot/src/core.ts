@@ -132,9 +132,14 @@ export function reconcile(opts: { background?: boolean } = {}) {
   const now = Date.now();
   const dead: string[] = [];
   const missingIds = new Set<string>();
+  const gone = new Map<string, boolean>();
   for (const s of db.liveSessions()) {
     // Pane ids restart with a new tmux server (reboot, kill-server), so an old id may now name an unrelated pane.
     if (s.pane && server && s.tmux_server && s.tmux_server !== server) {
+      // Only when that server is really gone; if it still runs, this process is just talking to another tmux
+      // server (a second one, or a test one) and must leave the session alone.
+      if (!gone.has(s.tmux_server)) gone.set(s.tmux_server, tmux.serverGone(s.tmux_server));
+      if (!gone.get(s.tmux_server)) continue;
       if (s.bg) place(s.id, null);
       else dead.push(s.id);
       continue;
