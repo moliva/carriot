@@ -5,12 +5,21 @@ import { parseArgs } from "node:util";
 import { adapt as claude } from "./adapters/claude";
 import * as core from "./core";
 import * as db from "./db";
+import { ansiFg, COLOUR } from "./palette";
 import * as tmux from "./tmux";
 import { BLOCKED, isStale, label, type SessionRow, type State } from "./types";
 
 const ADAPTERS: Record<string, (payload: any) => ReturnType<typeof claude>> = { claude };
 
-const C = { red: "\x1b[31m", yellow: "\x1b[33m", green: "\x1b[32m", blue: "\x1b[34m", dim: "\x1b[2m", bold: "\x1b[1m", reset: "\x1b[0m" };
+const C = {
+  red: ansiFg(COLOUR.blocked),
+  yellow: ansiFg(COLOUR.waiting),
+  green: ansiFg(COLOUR.working),
+  blue: ansiFg(COLOUR.planning),
+  dim: "\x1b[2m",
+  bold: "\x1b[1m",
+  reset: "\x1b[0m",
+};
 const color = (s: SessionRow) =>
   isStale(s) ? C.dim : BLOCKED.includes(s.state) ? C.red : s.state === "waiting" ? C.yellow : s.mode === "plan" ? C.blue : C.green;
 

@@ -1,4 +1,5 @@
 import type { TmuxInfo } from "./db";
+import { COLOUR } from "./palette";
 import { BLOCKED, isStale, type SessionRow } from "./types";
 
 function tmux(...args: string[]): string | null {
@@ -156,11 +157,11 @@ export function detach(pane: string): boolean {
 }
 
 const BADGE: Record<string, string> = {
-  blocked: "#[fg=red,bold]●",
-  waiting: "#[fg=yellow]●",
-  planning: "#[fg=blue]●",
-  working: "#[fg=green]●",
-  idle: "#[fg=colour244]○",
+  blocked: `#[fg=colour${COLOUR.blocked},bold]●`,
+  waiting: `#[fg=colour${COLOUR.waiting}]●`,
+  planning: `#[fg=colour${COLOUR.planning}]●`,
+  working: `#[fg=colour${COLOUR.working}]●`,
+  idle: `#[fg=colour${COLOUR.idle}]○`,
 };
 
 /** Worst state across the window's active agents (grey when all are idle), as a pre-rendered badge in the @carriot_badge window option. */
