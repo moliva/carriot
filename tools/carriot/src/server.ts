@@ -86,6 +86,11 @@ export function serve(port: number) {
         });
       }
 
+      if (url.pathname === "/icon.svg")
+        return new Response(Bun.file(join(import.meta.dir, "../assets/icon.svg")), {
+          headers: { "content-type": "image/svg+xml", "cache-control": "max-age=3600" },
+        });
+
       if (!url.pathname.startsWith("/api/")) return new Response("not found", { status: 404 });
       if ((req.headers.get("x-carriot-token") ?? url.searchParams.get("token")) !== token)
         return new Response("forbidden", { status: 403 });
