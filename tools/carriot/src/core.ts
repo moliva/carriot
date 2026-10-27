@@ -2,6 +2,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as db from "./db";
 import * as notify from "./notify";
+import { ticketUrl } from "./work";
 import * as tmux from "./tmux";
 import { isStale, needsYou, urgency, type AdapterResult, type AgentEvent, type SessionRow } from "./types";
 
@@ -392,4 +393,9 @@ export function resumeLost(): { ok: boolean; message: string } {
   return failed.length
     ? { ok: false, message: `resumed ${lost.length - failed.length} of ${lost.length}; ${failed[0].message}` }
     : { ok: true, message: `resumed ${lost.length} session${lost.length === 1 ? "" : "s"}` };
+}
+
+/** Linear URL for a ticket: recorded from a PR or Linear, else built from the learned (or configured) workspace. */
+export function ticketLink(id: string): string | null {
+  return ticketUrl(id, db.getTicket(id)?.url ?? null, process.env.CARRIOT_LINEAR_WORKSPACE || db.getSetting("linear_workspace"));
 }

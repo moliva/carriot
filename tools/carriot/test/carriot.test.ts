@@ -482,6 +482,29 @@ describe("tickets and PRs", () => {
     expect(work.prLine(pr({ repo: "acme/infra" }), (r) => `[${r}]`)).toStartWith("[infra#7] · open · CI 3/3 passed");
   });
 
+  test("Linear links in PR text give ticket URLs and the workspace", () => {
+    const links = work.linearLinks([
+      "Fixes https://linear.app/acme/issue/BEPLAT-6321/fix-the-selectors",
+      null,
+      "see https://linear.app/acme/issue/beplat-6214 and https://linear.app/acme/issue/BEPLAT-6321 again",
+    ]);
+    expect(links).toEqual([
+      { id: "BEPLAT-6321", url: "https://linear.app/acme/issue/BEPLAT-6321", workspace: "acme" },
+      { id: "BEPLAT-6214", url: "https://linear.app/acme/issue/BEPLAT-6214", workspace: "acme" },
+    ]);
+    expect(work.ticketUrl("BEPLAT-1", null, "acme")).toBe("https://linear.app/acme/issue/BEPLAT-1");
+    expect(work.ticketUrl("BEPLAT-1", "https://x", "acme")).toBe("https://x");
+    expect(work.ticketUrl("BEPLAT-1", null, null)).toBeNull();
+  });
+
+  test("a learned ticket URL survives a refresh without a Linear key", () => {
+    db.setTicketUrl("LINK-1", "https://linear.app/acme/issue/LINK-1");
+    db.putTicket({ id: "LINK-1", title: null, status: null, url: null });
+    expect(db.getTicket("LINK-1")?.url).toBe("https://linear.app/acme/issue/LINK-1");
+    db.putSetting("linear_workspace", "acme");
+    expect(core.ticketLink("OTHER-9")).toBe("https://linear.app/acme/issue/OTHER-9");
+  });
+
   test("the first look is a quiet baseline", () => {
     expect(work.diffPr(null, pr({ checks: { failed: 2, pending: 0, passed: 0, total: 2 } }))).toEqual({ attention: null, notify: null });
   });

@@ -24,6 +24,11 @@ export async function refreshAll(): Promise<Refreshed> {
     const prev: PrStatus | null = before?.pr ? JSON.parse(before.pr) : null;
     db.putWork({ session_id: s.id, repo: work.repo, branch: work.branch, ticket: work.ticket, pr: work.pr ? JSON.stringify(work.pr) : null });
 
+    // PR text links Linear issues; keep their URLs and learn the workspace so other tickets can link too.
+    for (const l of work.links) {
+      db.setTicketUrl(l.id, l.url);
+      if (db.getSetting("linear_workspace") !== l.workspace) db.putSetting("linear_workspace", l.workspace);
+    }
     if (work.ticket) {
       const cached = db.getTicket(work.ticket);
       if (!cached || Date.now() - cached.fetched_at > TICKET_TTL_MS) db.putTicket(await fetchTicket(work.ticket));

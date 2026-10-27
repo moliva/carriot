@@ -322,7 +322,7 @@ async function renderMain(force = false) {
           s.pane || s.bg ? h("button", { class: "btn primary", onclick: () => api(`/api/sessions/${s.id}/jump`, { method: "POST" }).then(() => toast("Switched terminal"), (e) => toast(e.message)) }, s.location === "background" ? "Attach in terminal" : "Open in terminal") : null)),
       h("div", { class: "meta" }, [s.agent, s.location ? WHERE[s.location] : null, shortCwd(s.cwd), s.tmux_target, s.mode && s.mode !== "default" ? `mode: ${s.mode}` : null, s.id.slice(0, 8)].filter(Boolean).join(" · ")),
       s.work && (s.work.ticket || s.work.pr) ? h("div", { class: "meta" },
-        s.work.ticket ? h("strong", {}, s.work.ticket) : null,
+        s.work.ticket ? h("strong", {}, s.work.ticketUrl ? h("a", { href: s.work.ticketUrl, target: "_blank", rel: "noopener" }, s.work.ticket) : s.work.ticket) : null,
         s.work.ticketTitle ? ` ${s.work.ticketTitle}` : "",
         s.work.ticketStatus ? ` · ${s.work.ticketStatus}` : "",
         s.work.ticket && s.work.pr ? " · " : "",

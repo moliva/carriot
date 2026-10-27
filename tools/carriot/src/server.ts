@@ -18,7 +18,7 @@ function workSummary(id: string) {
   const pr: PrStatus | null = w.pr ? JSON.parse(w.pr) : null;
   if (pr && !pr.repo) pr.repo = w.repo;
   const t = w.ticket ? db.getTicket(w.ticket) : null;
-  return { ticket: w.ticket, ticketTitle: t?.title ?? null, ticketStatus: t?.status ?? null, pr: pr ? prLine(pr) : null, prUrl: pr?.url ?? null, branch: w.branch };
+  return { ticket: w.ticket, ticketUrl: w.ticket ? core.ticketLink(w.ticket) : null, ticketTitle: t?.title ?? null, ticketStatus: t?.status ?? null, pr: pr ? prLine(pr) : null, prUrl: pr?.url ?? null, branch: w.branch };
 }
 
 function snapshot() {
