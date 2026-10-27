@@ -62,6 +62,8 @@ aside { border-right: 1px solid var(--border); background: var(--panel); display
 .pill.green { color: var(--green); background: var(--green-bg); border-color: transparent; }
 .tools { display: flex; gap: 6px; margin-top: 8px; }
 .tools button { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; font-size: 12px; color: var(--muted); }
+.tools button.update { color: var(--yellow); border-color: var(--yellow); }
+.tools button[disabled] { opacity: .6; cursor: default; }
 .list { overflow-y: auto; flex: 1; padding: 6px 8px 16px; }
 .group { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 8px 6px; }
 .card { display: block; width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; margin-bottom: 2px; }
@@ -187,6 +189,7 @@ td.d2h-code-linenumber:not(.d2h-info):hover, td.d2h-code-side-linenumber:not(.d2
       <div class="tools">
         <button id="notify">Enable notifications</button>
         <button id="theme">Theme</button>
+        <button id="restart" title="Restart the dashboard server so it runs the latest carriot code">Restart server</button>
       </div>
     </div>
     <div class="list" id="list"></div>
@@ -749,6 +752,40 @@ $("#notify").addEventListener("click", async () => {
   if (!("Notification" in window)) return toast("Notifications unsupported");
   toast((await Notification.requestPermission()) === "granted" ? "Notifications on" : "Notifications blocked");
 });
+async function checkVersion() {
+  try {
+    const v = await api("/api/version");
+    const btn = $("#restart");
+    btn.classList.toggle("update", v.stale);
+    btn.textContent = v.stale ? "Restart server · update" : "Restart server";
+    btn.title = v.stale
+      ? `carriot moved from ${v.commit} to ${v.current} since this server started; restart to run it`
+      : `Running ${v.commit ?? "unknown commit"}, started ${ago(v.startedAt)} ago`;
+  } catch {}
+}
+
+$("#restart").addEventListener("click", async () => {
+  const btn = $("#restart");
+  btn.disabled = true;
+  btn.textContent = "Restarting…";
+  try { await api("/api/restart", { method: "POST" }); } catch {}
+  // A new server issues a new token, so reload the page once it answers instead of reconnecting.
+  const deadline = Date.now() + 20000;
+  await new Promise((r) => setTimeout(r, 600));
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch("/", { cache: "no-store" });
+      if (res.ok) return location.reload();
+    } catch {}
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  btn.disabled = false;
+  btn.textContent = "Restart server";
+  toast("The server did not come back. Run carriot open in a terminal.");
+});
+checkVersion();
+setInterval(checkVersion, 60000);
+
 $("#theme").addEventListener("click", () => {
   const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
   const next = cur === "dark" ? "light" : "dark";
