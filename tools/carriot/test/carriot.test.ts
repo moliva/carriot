@@ -7,7 +7,7 @@ const dir = mkdtempSync(join(tmpdir(), "carriot-test-"));
 process.env.CARRIOT_DB = join(dir, "carriot.db");
 
 const { adapt } = await import("../src/adapters/claude");
-const { flag, isPrCreate } = await import("../src/pr");
+const { fileDiff, flag, isPrCreate, prArtifact } = await import("../src/pr");
 const db = await import("../src/db");
 const core = await import("../src/core");
 const { fuzzyScore } = await import("../src/fuzzy");
@@ -116,6 +116,53 @@ describe("pr flag parsing", () => {
     expect(flag(`gh pr create --base develop --title x`, ["--base"])).toBe("develop");
     expect(flag(`gh pr create --base=develop`, ["--base"])).toBe("develop");
     expect(flag(`gh pr create -t short`, ["--title", "-t"])).toBe("short");
+  });
+});
+
+describe("pr context expansion", () => {
+  const repo = join(dir, "repo");
+  const git = (...args: string[]) => Bun.spawnSync(["git", "-C", repo, ...args], { stdout: "pipe", stderr: "pipe" });
+  let preview: ReturnType<typeof prArtifact>;
+
+  beforeAll(() => {
+    mkdirSync(repo);
+    const lines = Array.from({ length: 40 }, (_, i) => `line ${i + 1}`);
+    git("init", "-q", "-b", "main");
+    git("config", "user.email", "t@t");
+    git("config", "user.name", "t");
+    git("config", "commit.gpgsign", "false");
+    writeFileSync(join(repo, "a.txt"), lines.join("\n") + "\n");
+    git("add", ".");
+    git("commit", "-qm", "base");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    git("switch", "-qc", "feat");
+    lines[19] = "changed";
+    writeFileSync(join(repo, "a.txt"), lines.join("\n") + "\n");
+    git("commit", "-qam", "change");
+    preview = prArtifact("gh pr create -t x -b y --base main", repo);
+  });
+
+  test("the preview pins the commits it was taken from", () => {
+    expect(preview.meta?.baseSha).toBe(git("rev-parse", "main").stdout.toString().trim());
+    expect(preview.meta?.headSha).toBe(git("rev-parse", "feat").stdout.toString().trim());
+  });
+
+  test("re-diffs a previewed file with more context", () => {
+    expect(preview.diff).not.toContain("line 10\n");
+    const wider = fileDiff(preview.diff!, preview.meta!, "a.txt", "a.txt", 15);
+    expect(wider).toContain(" line 10\n");
+    expect(wider).toContain("+changed");
+  });
+
+  test("ignores later commits on the branch", () => {
+    writeFileSync(join(repo, "a.txt"), "rewritten\n");
+    git("commit", "-qam", "later");
+    expect(fileDiff(preview.diff!, preview.meta!, "a.txt", "a.txt", 3)).toContain("+changed");
+  });
+
+  test("refuses files outside the preview", () => {
+    expect(fileDiff(preview.diff!, preview.meta!, "../../etc/passwd", "../../etc/passwd", 3)).toBeNull();
+    expect(fileDiff(preview.diff!, { ...preview.meta, headSha: undefined }, "a.txt", "a.txt", 3)).toBeNull();
   });
 });
 

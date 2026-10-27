@@ -72,10 +72,24 @@ export function prArtifact(cmd: string, hookCwd: string): Artifact {
       base,
       head,
       repo: flag(cmd, ["--repo", "-R"]),
+      baseSha: mergeBase || undefined,
+      headSha: git(cwd, "rev-parse", "HEAD").trim() || undefined,
       draft: /\s--draft\b/.test(cmd),
       commits: git(cwd, "log", "--format=%h %s", range).trim().split("\n").filter(Boolean),
       stat: git(cwd, "diff", "--shortstat", range).trim(),
       command: cmd,
     },
   };
+}
+
+const MAX_CONTEXT = 100_000;
+
+/** One file of a captured PR re-diffed with more context, pinned to the commits the preview was taken from. */
+export function fileDiff(captured: string, meta: Record<string, unknown>, path: string, oldPath: string, context: number): string | null {
+  const { cwd, baseSha, headSha } = meta as { cwd?: string; baseSha?: string; headSha?: string };
+  if (!cwd || !baseSha || !headSha) return null;
+  // Only files that are part of the preview, so the endpoint can't be used to read anything else.
+  if (!captured.includes(`diff --git a/${oldPath} b/${path}\n`)) return null;
+  const n = Math.min(Math.max(Math.trunc(context) || 0, 0), MAX_CONTEXT);
+  return git(cwd, "diff", "--no-color", "--no-ext-diff", "-M", `-U${n}`, baseSha, headSha, "--", ...new Set([oldPath, path]));
 }
