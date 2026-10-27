@@ -135,10 +135,15 @@ main { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 .tree-stat, .tree-cm { font: 11px ui-monospace, Menlo, monospace; white-space: nowrap; } .tree-cm { color: var(--accent); }
 .add { color: var(--green); } .del { color: var(--red); }
 .file { margin-bottom: 16px; }
-.d2h-wrapper { max-width: 100%; } .d2h-file-wrapper { border-radius: 8px; margin-bottom: 0; }
+.d2h-wrapper { max-width: 100%; } .d2h-file-wrapper { position: relative; border-radius: 8px; margin-bottom: 0; }
 .file .d2h-file-header { position: sticky; top: 0; z-index: 3; }
 .file-actions { margin-left: auto; display: flex; gap: 6px; padding-left: 8px; } .file-actions .btn { padding: 1px 8px; font-size: 12px; white-space: nowrap; }
 .d2h-code-line-ctn.hljs { background: transparent; }
+/* Dark tints are translucent; laid over the page background, line numbers stay opaque while code scrolls under them. */
+.d2h-dark-color-scheme .d2h-ins { --tint: var(--d2h-dark-ins-bg-color); } .d2h-dark-color-scheme .d2h-del { --tint: var(--d2h-dark-del-bg-color); }
+.d2h-dark-color-scheme .d2h-info { --tint: var(--d2h-dark-info-bg-color); }
+.d2h-dark-color-scheme :is(.d2h-emptyplaceholder, .d2h-code-side-emptyplaceholder) { --tint: var(--d2h-dark-empty-placeholder-bg-color); }
+.d2h-dark-color-scheme :is(.d2h-code-linenumber, .d2h-code-side-linenumber) { background: linear-gradient(var(--tint, transparent), var(--tint, transparent)) var(--d2h-dark-bg-color); }
 td.d2h-code-linenumber:not(.d2h-info), td.d2h-code-side-linenumber:not(.d2h-info):not(.d2h-code-side-emptyplaceholder) { cursor: pointer; }
 td.d2h-code-linenumber:not(.d2h-info):hover, td.d2h-code-side-linenumber:not(.d2h-info):not(.d2h-code-side-emptyplaceholder):hover { background: var(--blue-bg); color: var(--blue); }
 .expandable td.d2h-info { cursor: pointer; } .expandable td.d2h-info:hover { color: var(--accent); }
