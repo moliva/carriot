@@ -32,6 +32,7 @@ function snapshot() {
     stale: isStale(s),
     work: workSummary(s.id),
     artifacts: artifacts.get(s.id) ?? {},
+    prPending: core.prPending(s),
   }));
 }
 

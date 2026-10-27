@@ -101,6 +101,7 @@ main { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .tabs { display: flex; gap: 2px; margin-top: 12px; overflow-x: auto; }
 .tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 12px; color: var(--muted); white-space: nowrap; }
+.tabkey { font: 600 10px ui-monospace, Menlo, monospace; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-right: 6px; background: transparent; }
 .tab.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
 .tab[disabled] { opacity: .4; cursor: default; }
 .body { overflow-y: auto; flex: 1; padding: 20px 24px 120px; }
@@ -274,9 +275,17 @@ function renderList() {
   }
 }
 
+/** Number keys for the tabs, matching reins (1 overview, 2 plan, 3 PR preview, 4 terminal). */
+const TAB_KEYS = { overview: "1", plan: "2", pr: "3", screen: "4" };
+
+/** Back to the terminal on this session: switches tmux to it (unparking or attaching first) and brings the terminal app forward. */
+function goToTerminal(id) {
+  api(`/api/sessions/${id}/jump`, { method: "POST" }).then(() => toast("Back to the terminal"), (e) => toast(e.message));
+}
+
 function defaultTab(s) {
   if (s.state === "plan_review" && s.artifacts.plan) return "plan";
-  if (s.state === "pr_review" && s.artifacts.pr) return "pr";
+  if (s.artifacts.pr && (s.state === "pr_review" || s.prPending)) return "pr";
   if (s.state === "needs_approval" || s.state === "question") return "screen";
   return "overview";
 }
@@ -319,7 +328,7 @@ async function renderMain(force = false) {
         h("div", { class: "actions" },
           s.pane || s.bg ? h("button", { class: "btn", onclick: () => api(`/api/sessions/${s.id}/park`, { method: "POST" }).then((r) => toast(r.message), (e) => toast(e.message)) },
             s.location === "parked" ? "Unpark" : s.location === "background" ? "In background" : s.bg ? "Detach" : "Park") : null,
-          s.pane || s.bg ? h("button", { class: "btn primary", onclick: () => api(`/api/sessions/${s.id}/jump`, { method: "POST" }).then(() => toast("Switched terminal"), (e) => toast(e.message)) }, s.location === "background" ? "Attach in terminal" : "Open in terminal") : null)),
+          s.pane || s.bg ? h("button", { class: "btn primary", title: "Back to this session in the terminal (t)", onclick: () => goToTerminal(s.id) }, s.location === "background" ? "Attach in terminal" : "Open in terminal") : null)),
       h("div", { class: "meta" }, [s.agent, s.location ? WHERE[s.location] : null, shortCwd(s.cwd), s.tmux_target, s.mode && s.mode !== "default" ? `mode: ${s.mode}` : null, s.id.slice(0, 8)].filter(Boolean).join(" · ")),
       s.work && (s.work.ticket || s.work.pr) ? h("div", { class: "meta" },
         s.work.ticket ? h("strong", {}, s.work.ticketUrl ? h("a", { href: s.work.ticketUrl, target: "_blank", rel: "noopener" }, s.work.ticket) : s.work.ticket) : null,
@@ -328,7 +337,8 @@ async function renderMain(force = false) {
         s.work.ticket && s.work.pr ? " · " : "",
         s.work.pr ? (s.work.prUrl ? h("a", { href: s.work.prUrl, target: "_blank", rel: "noopener" }, s.work.pr) : s.work.pr) : null) : null,
       h("div", { class: "tabs" }, tabs.map(([id, name, on]) =>
-        h("button", { class: `tab ${tab === id ? "on" : ""}`, disabled: !on, onclick: () => { tab = id; renderMain(true); } }, name))),
+        h("button", { class: `tab ${tab === id ? "on" : ""}`, disabled: !on, title: `Shortcut: ${TAB_KEYS[id]}`, onclick: () => { tab = id; renderMain(true); } },
+          h("kbd", { class: "tabkey" }, TAB_KEYS[id]), name))),
     ),
     body,
     s.pane ? replyBox(s) : "",
@@ -808,8 +818,16 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", themeChang
 syncHljs();
 window.addEventListener("hashchange", () => { const id = decodeURIComponent(location.hash.slice(1)); if (id && id !== selected) select(id); });
 document.addEventListener("keydown", (e) => {
-  if (e.target.tagName === "TEXTAREA") return;
+  // Leave typing and ⌘/ctrl shortcuts (copy, paste, reload) alone.
+  if (["TEXTAREA", "INPUT", "SELECT"].includes(e.target.tagName) || e.target.isContentEditable || e.metaKey || e.ctrlKey || e.altKey) return;
   const i = sessions.findIndex((s) => s.id === selected);
+  const tabId = Object.keys(TAB_KEYS).find((id) => TAB_KEYS[id] === e.key);
+  if (tabId && selected) {
+    const btn = [...document.querySelectorAll(".tab")].find((b) => b.title === `Shortcut: ${e.key}`);
+    if (btn && !btn.disabled) { tab = tabId; renderMain(true); }
+    return;
+  }
+  if (e.key === "t" && selected) return goToTerminal(selected);
   if (e.key === "j" && i < sessions.length - 1) select(sessions[i + 1].id);
   if (e.key === "k" && i > 0) select(sessions[i - 1].id);
   if (e.key === "o" && selected) $(".btn.primary")?.click();

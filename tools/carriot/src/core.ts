@@ -305,7 +305,7 @@ export function newAgent(opts: {
   cwd?: string;
   name?: string;
   skipPermissions?: boolean;
-}): { ok: boolean; message: string } {
+}): { ok: boolean; message: string; pane?: string } {
   const claude = Bun.which("claude") ?? "claude";
   const flags = opts.skipPermissions === false ? [] : ["--dangerously-skip-permissions"];
   const prompt = opts.prompt?.trim();
@@ -321,7 +321,7 @@ export function newAgent(opts: {
     command: windowCommand([...flags, ...(prompt ? [shellQuote(prompt)] : [])]),
   });
   if (!pane) return { ok: false, message: "Could not open a tmux window (is tmux running?)." };
-  return { ok: true, message: prompt ? `new agent: ${prompt.slice(0, 50)}` : "new agent started" };
+  return { ok: true, message: prompt ? `new agent: ${prompt.slice(0, 50)}` : "new agent started", pane };
 }
 
 /** Lost sessions from the last day are what "resume everything" brings back after a crash or reboot. */
@@ -398,4 +398,18 @@ export function resumeLost(): { ok: boolean; message: string } {
 /** Linear URL for a ticket: recorded from a PR or Linear, else built from the learned (or configured) workspace. */
 export function ticketLink(id: string): string | null {
   return ticketUrl(id, db.getTicket(id)?.url ?? null, process.env.CARRIOT_LINEAR_WORKSPACE || db.getSetting("linear_workspace"));
+}
+
+/**
+ * The session has a PR preview whose PR does not exist yet: the agent is about to open it, or is waiting for you to say
+ * so. Views open such sessions on the PR preview, whatever the agent state.
+ */
+export function prPending(s: SessionRow): boolean {
+  const a = db.latestArtifact(s.id, "pr");
+  if (!a) return false;
+  try {
+    return !JSON.parse(a.meta ?? "{}").url;
+  } catch {
+    return true;
+  }
 }
