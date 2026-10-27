@@ -5,7 +5,7 @@ import { parseArgs } from "node:util";
 import { adapt as claude } from "./adapters/claude";
 import * as core from "./core";
 import * as db from "./db";
-import { ansiFg, COLOUR } from "./palette";
+import { ansiFg, COLOUR, DELTA_THEME, GLOW_STYLE } from "./palette";
 import * as tmux from "./tmux";
 import { BLOCKED, isStale, label, type SessionRow, type State } from "./types";
 
@@ -135,13 +135,13 @@ async function pipeTo(cmd: string[], input: string) {
 
 async function markdown(text: string) {
   const width = Number(process.env.FZF_PREVIEW_COLUMNS) || process.stdout.columns || 100;
-  if (which("glow")) return pipeTo(["glow", "-s", "dark", "-w", String(Math.min(width, 120)), "-"], text);
+  if (which("glow")) return pipeTo(["glow", "-s", GLOW_STYLE, "-w", String(Math.min(width, 120)), "-"], text);
   if (which("bat")) return pipeTo(["bat", "-l", "md", "--style=plain", "--color=always", "--paging=never"], text);
   process.stdout.write(`${text}\n`);
 }
 
 async function diff(text: string) {
-  if (which("delta")) return pipeTo(["delta", "--paging=never"], text);
+  if (which("delta")) return pipeTo(["delta", "--paging=never", ...DELTA_THEME], text);
   const out = text
     .split("\n")
     .map((l) =>

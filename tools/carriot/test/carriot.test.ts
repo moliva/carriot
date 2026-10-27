@@ -383,3 +383,12 @@ describe("hook entry", () => {
     expect(() => core.handle("claude", "{}", () => ({ event: broken }))).toThrow();
   });
 });
+
+describe("palette", () => {
+  test("state colours stay within the 16 theme colours so terminal themes recolour them", async () => {
+    const { COLOUR, ansiFg } = await import("../src/palette");
+    for (const n of Object.values(COLOUR)) expect(n).toBeLessThan(16);
+    expect(ansiFg(1)).toBe("\x1b[31m");
+    expect(ansiFg(8)).toBe("\x1b[90m");
+  });
+});
