@@ -1,7 +1,7 @@
 import * as core from "./core";
 import * as db from "./db";
 import { fuzzyScore } from "./fuzzy";
-import { ansiFg, COLOUR } from "./palette";
+import { ansiFg, COLOUR, DELTA_THEME, GLOW_STYLE } from "./palette";
 import * as tmux from "./tmux";
 import { BLOCKED, isStale, label, STALE_AFTER_MS, type SessionRow } from "./types";
 
@@ -16,7 +16,6 @@ const A = {
   green: ansiFg(COLOUR.working),
   blue: ansiFg(COLOUR.planning),
   grey: ansiFg(COLOUR.idle),
-  selBg: `${ESC}48;5;236m`,
 };
 
 type Tab = "overview" | "plan" | "pr" | "screen";
@@ -110,10 +109,10 @@ function external(key: string, cmd: string[], input: string, fallback: () => str
 }
 
 const markdown = (key: string, text: string, width: number) =>
-  external(`md:${key}:${width}`, ["glow", "-s", "dark", "-w", String(width), "-"], text, () => wrap(text, width));
+  external(`md:${key}:${width}`, ["glow", "-s", GLOW_STYLE, "-w", String(width), "-"], text, () => wrap(text, width));
 
 const diff = (key: string, text: string, width: number) =>
-  external(`diff:${key}:${width}`, ["delta", "--paging=never", `--width=${width}`], text, () =>
+  external(`diff:${key}:${width}`, ["delta", "--paging=never", `--width=${width}`, ...DELTA_THEME], text, () =>
     text.split("\n").map((l) =>
       l.startsWith("+") ? `${A.green}${l}` : l.startsWith("-") ? `${A.red}${l}` : l.startsWith("@@") ? `${A.blue}${l}` : l,
     ),
@@ -256,7 +255,8 @@ function listLines(width: number, height: number): string[] {
     for (const s of items) {
       const sel = s.id === selectedId;
       if (sel) selLine = lines.length;
-      const bg = sel ? A.selBg : "";
+      // Selection shows as the marker bar plus a reversed name rather than a fixed background, which no theme recolours.
+      const bg = "";
       const gone = ended(s);
       const idle = gone || isStale(s);
       const dot = idle ? `${A.dim}${tint(s)}` : tint(s);
@@ -268,7 +268,7 @@ function listLines(width: number, height: number): string[] {
       const tag = where ? ` ${WHERE[where]}` : "";
       const name = fit(core.displayName(s), Math.max(4, nameMax - Bun.stringWidth(tag)), bg).trimEnd();
       lines.push(
-        `${bg}${marker}${A.reset}${bg}${dot}${gone ? "✕" : "●"}${A.reset}${bg} ${idle ? A.grey : A.bold}${fit(`${name}${A.reset}${bg}${A.grey}${tag}`, nameMax, bg)}${A.reset}${bg} ${ageTint(ts)}${age}${A.reset}${bg} ${A.reset}`,
+        `${bg}${marker}${A.reset}${bg}${dot}${gone ? "✕" : "●"}${A.reset}${bg} ${idle ? A.grey : A.bold}${fit(`${sel ? A.inverse : ""}${name}${A.reset}${bg}${A.grey}${tag}`, nameMax, bg)}${A.reset}${bg} ${ageTint(ts)}${age}${A.reset}${bg} ${A.reset}`,
       );
       const detail = s.detail ? ` · ${s.detail.replace(/\s+/g, " ")}` : "";
       const status = gone ? endedLabel(s) : label(s);
