@@ -216,7 +216,7 @@ function selectBestMatch() {
 
 function defaultTab(s: SessionRow): Tab {
   if (s.state === "plan_review" && db.latestArtifact(s.id, "plan")) return "plan";
-  if (s.state === "pr_review" && db.latestArtifact(s.id, "pr")) return "pr";
+  if (s.state === "pr_review" || core.prPending(s)) return db.latestArtifact(s.id, "pr") ? "pr" : "overview";
   if (s.state === "needs_approval" || s.state === "question") return "screen";
   return "overview";
 }
@@ -529,6 +529,8 @@ function onKey(key: string) {
       const r = core.newAgent({ prompt: composing, cwd: process.env.CARRIOT_NEW_CWD ?? `${import.meta.dir}/../../..` });
       composing = null;
       say(r.message);
+      // The window lands in the session you came from; follow it there.
+      if (r.pane) tmux.jump(r.pane, false);
     } else if (key === "\x7f") composing = composing.slice(0, -1);
     else if (key >= " " && !key.startsWith("\x1b")) composing += key;
     return;

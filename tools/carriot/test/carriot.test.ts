@@ -537,3 +537,14 @@ describe("tickets and PRs", () => {
     expect(db.getSession("att-1")?.attention).toBeNull();
   });
 });
+
+describe("opening tab", () => {
+  test("a PR preview that has not been created yet is pending, whatever the agent state", () => {
+    db.apply({ agent: "claude", sessionId: "tab-1", state: "waiting", artifact: { kind: "pr", title: "t", body: "b", meta: { base: "main" } } });
+    expect(core.prPending(db.getSession("tab-1")!)).toBe(true);
+    db.apply({ agent: "claude", sessionId: "tab-1", artifactUpdate: { kind: "pr", meta: { url: "https://github.com/acme/app/pull/1" } } });
+    expect(core.prPending(db.getSession("tab-1")!)).toBe(false);
+    db.apply({ agent: "claude", sessionId: "tab-2", state: "waiting" });
+    expect(core.prPending(db.getSession("tab-2")!)).toBe(false);
+  });
+});

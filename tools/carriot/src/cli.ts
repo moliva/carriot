@@ -43,7 +43,7 @@ enter / jump reconnects anything: parked sessions come back, background ones ope
 
 ${c.bold}TMUX${c.reset}  ${c.dim}(prefix = C-a)${c.reset}
   prefix A          new agent window (claude --dangerously-skip-permissions)
-  prefix T          reins: every session, full screen (stays open in a "reins" window)
+  prefix T          reins in its own tmux session (carriot-reins); press again to go back
   prefix F          picker popup
   prefix b          jump to the session that has waited on you the longest
   prefix P          park the current agent (it keeps running out of sight)
@@ -53,7 +53,7 @@ ${c.bold}TMUX${c.reset}  ${c.dim}(prefix = C-a)${c.reset}
 
 ${c.bold}WEZTERM${c.reset}  ${c.dim}(no prefix needed)${c.reset}
   cmd+shift+t       new agent window          cmd+b         next waiting
-  cmd+shift+a       reins (all sessions)      cmd+g         picker popup
+  cmd+shift+a       reins (again: go back)    cmd+g         picker popup
   cmd+shift+p       park the current agent    cmd+shift+o   web dashboard
   cmd+shift+w       close the current agent   cmd+/         this cheatsheet
 
@@ -82,7 +82,7 @@ ${c.bold}WEB DASHBOARD${c.reset}
   carriot app install build Carriot.app (own window and Dock icon) into ~/Applications
   carriot serve       run the server in the foreground instead
   carriot stop        stop the background server
-  j k move · o open in terminal · reply box at the bottom · enable notifications in the sidebar
+  j k move · 1-4 tabs · t back to the terminal · o open in terminal · reply box at the bottom · enable notifications in the sidebar
 
 ${c.bold}COMMANDS${c.reset}
   carriot new [prompt]          new tmux window running claude --dangerously-skip-permissions
@@ -403,6 +403,7 @@ async function main() {
     case "pick":
       return pick();
     case "reins": {
+      if (rest.includes("--toggle")) return tmux.toggleReins(`${self()} reins`);
       const { reins } = await import("./reins");
       return reins();
     }

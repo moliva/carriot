@@ -9,7 +9,7 @@ Open `docs/carriot-overview.html` in a browser for the full walkthrough (workflo
 Agent hooks call `bin/carriot hook <agent>`. An adapter (`src/adapters/<agent>.ts`) normalizes the payload into a `AgentEvent`, which is written to SQLite (`~/.local/state/carriot/carriot.db`, override with `CARRIOT_DB`). Every surface reads that database:
 
 - **tmux**: each window gets a `@carriot_badge` option holding the worst state among its agents.
-- **`carriot reins`**: full-screen view of every session, open in its own window: live session list, plan / PR preview / terminal tabs, jump and reply.
+- **`carriot reins`**: full-screen view of every session, in its own tmux session (`carriot-reins`, apart from the sessions agents live in; `prefix T` / cmd+shift+a toggles in and back out, and it keeps running in between): live session list, plan / PR preview / terminal tabs, jump and reply.
 - **`carriot pick`**: fzf popup with preview; jump, plan, PR preview, pane capture.
 - **`carriot next`**: jump to the session that has waited on you the longest.
 - **`carriot serve`**: local web dashboard with live updates, rendered plans, GitHub-style PR preview, and replies. The PR preview has a file tree, syntax highlighting, expandable context, and line comments sent back to the agent as one review ("Request changes" declines a pending `gh pr create`).

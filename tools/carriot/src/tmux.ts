@@ -88,19 +88,31 @@ export function respawn(pane: string, cwd: string, command: string): boolean {
 /** Hidden tmux session that holds parked agents; it disappears on its own when its last window leaves. */
 export const PARK = process.env.CARRIOT_PARK_SESSION ?? "carriot-parked";
 
+/** Reins runs in its own tmux session, apart from the sessions agents live in. */
+export const REINS = process.env.CARRIOT_REINS_SESSION ?? "carriot-reins";
+
+/** carriot's own sessions: nothing an agent needs (new windows, unparked ones) is ever placed in them. */
+const OWN = new Set([PARK, REINS]);
+
 export const isParked = (target: string | null | undefined) => !!target && target.startsWith(`${PARK}:`);
 
 /** Session of the client running this process (the pane carriot was started from), if any. */
+/**
+ * The session things should land in: the pane's own session, or, from reins or the park, the one the client was on
+ * before switching there.
+ */
 function currentSession(): string | null {
   const pane = process.env.TMUX_PANE;
   if (!pane) return null;
   const s = tmux("display-message", "-p", "-t", pane, "#{session_name}");
-  return s && s !== PARK ? s : null;
+  if (s && !OWN.has(s)) return s;
+  const last = tmux("display-message", "-p", "#{client_last_session}");
+  return last && !OWN.has(last) && tmux("has-session", "-t", `=${last}`) !== null ? last : null;
 }
 
 function fallbackSession(): string | null {
   const all = tmux("list-sessions", "-F", "#{session_name}");
-  return all?.split("\n").find((x) => x && x !== PARK) ?? null;
+  return all?.split("\n").find((x) => x && !OWN.has(x)) ?? null;
 }
 
 /** Moves a pane out of sight into the park session. A pane that shares its window leaves alone. */
@@ -227,10 +239,16 @@ export function sendText(pane: string, text: string, opts: { escapeFirst?: boole
 /** Opens a window right after the current one (or in the first session outside tmux) and selects it. */
 export function newWindow(opts: { cwd?: string; name: string; command?: string; session?: string }): string | null {
   const pane = process.env.TMUX_PANE;
-  const window = pane ? tmux("display-message", "-p", "-t", pane, "#{window_id}") : null;
+  // Next to the current window, unless that is reins or the park; then in the session you came from.
+  const own = pane ? OWN.has(tmux("display-message", "-p", "-t", pane, "#{session_name}") ?? "") : false;
+  const window = pane && !own ? tmux("display-message", "-p", "-t", pane, "#{window_id}") : null;
   // Without a pane to sit next to (a tmux hook), go back to the session it came from.
   const home = opts.session && tmux("has-session", "-t", `=${opts.session}`) !== null ? opts.session : null;
-  const placement = home && !window ? ["-d", "-t", `=${home}:`] : window ? ["-a", "-t", window] : ["-t", `=${fallbackSession() ?? ""}:`];
+  const placement = window
+    ? ["-a", "-t", window]
+    : home && !pane
+      ? ["-d", "-t", `=${home}:`]
+      : ["-t", `=${currentSession() ?? home ?? fallbackSession() ?? ""}:`];
   const cwd = opts.cwd ?? (pane ? tmux("display-message", "-p", "-t", pane, "#{pane_current_path}") : null);
   return tmux("new-window", "-P", "-F", "#{pane_id}", ...placement, "-n", opts.name, ...(cwd ? ["-c", cwd] : []), ...(opts.command ? [opts.command] : []));
 }
@@ -239,4 +257,22 @@ export function newWindow(opts: { cwd?: string; name: string; command?: string; 
 export function flash(message: string, ms: number): boolean {
   const pane = process.env.TMUX_PANE;
   return tmux("display-message", "-d", String(ms), ...(pane ? ["-t", pane] : []), message) !== null;
+}
+
+/**
+ * Toggles reins: from any session, switch to the reins session (starting it with `command` if needed); from reins,
+ * switch back to the session you came from.
+ */
+export function toggleReins(command: string) {
+  const pane = process.env.TMUX_PANE;
+  const here = pane ? tmux("display-message", "-p", "-t", pane, "#{session_name}") : null;
+  if (here === REINS) {
+    if (tmux("switch-client", "-l") === null) {
+      const other = fallbackSession();
+      if (other) tmux("switch-client", "-t", `=${other}`);
+    }
+    return;
+  }
+  if (tmux("has-session", "-t", `=${REINS}`) === null) tmux("new-session", "-d", "-s", REINS, "-n", "reins", command);
+  tmux("switch-client", "-t", `=${REINS}`);
 }
