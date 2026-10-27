@@ -32,3 +32,6 @@ set -g @resurrect-hook-post-restore-all "$HOME/carriot/bin/carriot resume --lost
 # PR watcher: checks each session's PR every 2 minutes (CI, reviews, comments) and flags sessions that need you.
 # Only one copy runs; reloading tmux leaves the running one in place.
 run-shell -b "$HOME/carriot/bin/carriot watch"
+
+# prefix O: open the dashboard (Carriot.app when installed) on the session in the current pane.
+bind O run-shell "TMUX_PANE=#{pane_id} ~/carriot/bin/carriot open"

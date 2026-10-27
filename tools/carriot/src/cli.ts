@@ -78,7 +78,8 @@ ${c.bold}PICKER POPUP${c.reset}  ${c.dim}carriot pick${c.reset}
   ctrl-s terminal   ctrl-o web    ctrl-x park       ctrl-l reload
 
 ${c.bold}WEB DASHBOARD${c.reset}
-  carriot open        open it in an app window (starts the server in the background if needed)
+  carriot open        open it on the current session (Carriot.app if installed, else a browser window)
+  carriot app install build Carriot.app (own window and Dock icon) into ~/Applications
   carriot serve       run the server in the foreground instead
   carriot stop        stop the background server
   j k move · o open in terminal · reply box at the bottom · enable notifications in the sidebar
@@ -443,7 +444,17 @@ async function main() {
         console.error(`carriot: dashboard did not start; see ${join(stateDir(), "serve.log")}`);
         process.exit(1);
       }
-      const url = `http://127.0.0.1:${port}/${rest[0] ? `#${rest[0]}` : ""}`;
+      if (rest.includes("--server-only")) return;
+      // No session named: the one running in the pane this was started from (⌘⇧O goes through tmux for that).
+      const ref = rest.find((a) => !a.startsWith("--"));
+      const pane = process.env.TMUX_PANE;
+      const id = ref ? (core.resolve(ref)?.id ?? ref) : pane ? db.liveSessions().find((s) => s.pane === pane)?.id : undefined;
+      const { appInstalled } = await import("./app");
+      if (appInstalled()) {
+        Bun.spawnSync(["open", id ? `carriot://focus/${id}` : "carriot://open"]);
+        return;
+      }
+      const url = `http://127.0.0.1:${port}/${id ? `#${id}` : ""}`;
       const chrome = "/Applications/Google Chrome.app";
       const args = (await Bun.file(`${chrome}/Contents/Info.plist`).exists())
         ? ["open", "-na", "Google Chrome", "--args", `--app=${url}`]
@@ -471,6 +482,12 @@ async function main() {
         skipPermissions: !v.safe,
       });
       return notify(r.message, !r.ok);
+    }
+    case "app": {
+      if (rest[0] !== "install") return notify("usage: carriot app install", true);
+      const { installApp } = await import("./app");
+      const path = installApp(process.env.CARRIOT_PORT ?? "7777");
+      return console.log(`installed ${path}; carriot open (⌘⇧O) now opens it`);
     }
     case "watch": {
       const { watch } = await import("./watch");
