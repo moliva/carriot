@@ -18,6 +18,9 @@ const self = () => `${process.env.CARRIOT_BIN ?? "carriot"}`;
 
 const CHEATSHEET = (c: typeof C) => `${c.bold}CARRIOT CHEATSHEET${c.reset}  ${c.dim}one chariot, many horses: see who is pulling and who is waiting on you${c.reset}
 
+${c.bold}AFTER A REBOOT${c.reset}  sessions come back on their own once tmux restores its windows. If any are missing:
+  prefix R (or R in reins) reopens everything lost in the last day; older ones: reins, e, then enter on each
+
 ${c.red}●${c.reset} needs you   ${c.yellow}●${c.reset} your turn   ${c.blue}●${c.reset} planning   ${c.green}●${c.reset} working
 idle: no activity for a day (CARRIOT_STALE_AFTER_HOURS); grouped last, grey ○ in tmux; prefix b reaches them only when nothing active waits
 ⏸ parked (hidden tmux session)   ◌ bg (claude --bg, detached)   ◉ bg (attached in a window)
@@ -151,7 +154,8 @@ const WHERE: Record<string, string> = { parked: "⏸ parked", background: "◌ b
  * so inside tmux it becomes a short status-line message instead.
  */
 function notify(message: string, error = false) {
-  if (process.env.TMUX_PANE && tmux.flash(`carriot: ${message}`, error ? 4000 : 1500)) return;
+  // TMUX alone (no pane) is a tmux hook such as tmux-resurrect's post-restore one.
+  if ((process.env.TMUX_PANE || process.env.TMUX) && tmux.flash(`carriot: ${message}`, error ? 4000 : 3000)) return;
   if (error) {
     console.error(message);
     process.exit(1);
