@@ -8,6 +8,13 @@ if [[ "${1:-}" == "hook-pr-gate" ]]; then
   set -- hook "${2:-claude}"
 fi
 
+# WezTerm keys and notification clicks start us with a bare PATH (/usr/bin:/bin:...), where tmux and claude are
+# missing and every call to them quietly fails. Add the usual install locations.
+for dir in "$HOME/.local/bin" "$HOME/.bun/bin" /usr/local/bin /opt/homebrew/bin; do
+  [[ -d "$dir" && ":$PATH:" != *":$dir:"* ]] && PATH="$dir:$PATH"
+done
+export PATH
+
 CARRIOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../tools/carriot" && pwd)"
 BUN="$(command -v bun || echo "$HOME/.bun/bin/bun")"
 if [[ ! -x "$BUN" ]]; then
