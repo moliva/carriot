@@ -26,7 +26,7 @@ Ticket titles and statuses come from Linear when a key is available: `CARRIOT_LI
 
 ## Notifications
 
-A macOS notification fires when a session **starts** needing you: needs approval, has a question, plan or PR ready for review (with a sound), or your turn (silent). It says the session name, what's needed and the detail (the command, the question, the plan or PR title, the agent's last line). Clicking it jumps to the session, unparking or attaching it first. It is skipped when you are already looking at that session (its pane on screen and the terminal app in front), new and resumed sessions stay quiet so a reboot resume does not fire one per agent, and a notification withdraws itself once its session no longer needs you. `CARRIOT_NOTIFY=blocked` skips "your turn", `off` silences them. Uses `terminal-notifier` (falls back to a plain notification without click-to-jump).
+A macOS notification fires when a session **starts** needing you: needs approval, has a question, plan or PR ready for review (with a sound), or your turn (silent). It says the session name, what's needed and the detail (the command, the question, the plan or PR title, the agent's last line). Clicking it jumps to the session, unparking or attaching it first. It is skipped when you are already looking at that session (its pane on screen and the terminal app in front), new and resumed sessions stay quiet so a reboot resume does not fire one per agent, and a notification withdraws itself once its session no longer needs you. `CARRIOT_NOTIFY=blocked` skips "your turn", `off` silences them. Uses `terminal-notifier` (falls back to a plain notification without click-to-jump). macOS ignores its `-appIcon` and shows the sending app's icon, so carriot sends through `carriot.app`, a copy of terminal-notifier.app with the icon from `assets/` (`icon.svg` is the source), built next to the database on first use; macOS asks once whether "carriot" may send notifications.
 
 ## Aging
 
@@ -96,7 +96,6 @@ Optional: `brew install glow git-delta` for nicer plan and diff rendering in the
 | `CARRIOT_PR_IGNORE_CHECKS` | `mergeable` | comma-separated check-name fragments that are not CI |
 | `CARRIOT_PR_IGNORE_AUTHORS` | `github-actions,linear-code,…` | comment authors that do not count as review activity |
 | `CARRIOT_NOTIFY` | `all` | `blocked` skips "your turn" notifications, `off` silences them |
-| `CARRIOT_ICON` | `assets/icon.png` | image shown on notifications (`assets/icon.svg` is its source) |
 | `CARRIOT_STALE_AFTER_HOURS` | `24` | no activity for this long moves a session to the idle group |
 | `CARRIOT_PR_GATE` | on | set to `0` to record PR previews without forcing a confirmation |
 | `CARRIOT_DEBUG` | off | log raw hook payloads to the `events` table (last 1000) |
