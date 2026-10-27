@@ -548,3 +548,13 @@ describe("opening tab", () => {
     expect(core.prPending(db.getSession("tab-2")!)).toBe(false);
   });
 });
+
+describe("tmux server restarts", () => {
+  test("a server counts as gone only when its process is gone or no longer tmux", async () => {
+    const { serverGone } = await import("../src/tmux");
+    expect(serverGone("999999")).toBe(true);
+    expect(serverGone(String(process.pid))).toBe(true);
+    const live = Bun.spawnSync(["tmux", "display-message", "-p", "#{pid}"], { stdout: "pipe", stderr: "ignore" });
+    if (live.exitCode === 0) expect(serverGone(live.stdout.toString().trim())).toBe(false);
+  });
+});

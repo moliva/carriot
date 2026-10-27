@@ -61,6 +61,20 @@ export function panes(): Map<string, PaneInfo> | null {
   return map;
 }
 
+/**
+ * A tmux server a session was recorded under no longer exists: its process is gone, or the pid now belongs to
+ * something that is not tmux (after a reboot pids get reused).
+ */
+export function serverGone(pid: string): boolean {
+  try {
+    process.kill(Number(pid), 0);
+  } catch {
+    return true;
+  }
+  const p = Bun.spawnSync(["ps", "-o", "comm=", "-p", pid], { stdout: "pipe", stderr: "ignore" });
+  return !/tmux/.test(p.stdout.toString());
+}
+
 /** PID of the running tmux server, or null when tmux is not reachable. */
 export function serverPid(): string | null {
   return tmux("display-message", "-p", "#{pid}") || null;
