@@ -16,6 +16,10 @@ Agent hooks call `bin/carriot hook <agent>`. An adapter (`src/adapters/<agent>.t
 
 Agents without an adapter can push states directly: `carriot emit --agent pi --session <id> --state waiting --detail "…"`.
 
+## Notifications
+
+A macOS notification fires when a session **starts** needing you: needs approval, has a question, plan or PR ready for review (with a sound), or your turn (silent). It says the session name, what's needed and the detail (the command, the question, the plan or PR title, the agent's last line). Clicking it jumps to the session, unparking or attaching it first. It is skipped when you are already looking at that session (its pane on screen and the terminal app in front), new and resumed sessions stay quiet so a reboot resume does not fire one per agent, and a notification withdraws itself once its session no longer needs you. `CARRIOT_NOTIFY=blocked` skips "your turn", `off` silences them. Uses `terminal-notifier` (falls back to a plain notification without click-to-jump).
+
 ## Aging
 
 A session with no hook activity (prompt, tool call, reply) for 24 hours is **idle**: reins lists it in a dimmed group at the bottom whatever its state, tmux shows a grey `○` for its window, the picker and dashboard list it last, and `prefix b` reaches it only when no active session is waiting. Ages are brighter the fresher they are (under 2h bright, under a day normal, older dim), and `s` in reins switches between longest-waiting-first and most-recent-first.
@@ -80,6 +84,7 @@ Optional: `brew install glow git-delta` for nicer plan and diff rendering in the
 |---|---|---|
 | `CARRIOT_DB` | `~/.local/state/carriot/carriot.db` | database path |
 | `CARRIOT_PORT` | `7777` | dashboard port |
+| `CARRIOT_NOTIFY` | `all` | `blocked` skips "your turn" notifications, `off` silences them |
 | `CARRIOT_STALE_AFTER_HOURS` | `24` | no activity for this long moves a session to the idle group |
 | `CARRIOT_PR_GATE` | on | set to `0` to record PR previews without forcing a confirmation |
 | `CARRIOT_DEBUG` | off | log raw hook payloads to the `events` table (last 1000) |

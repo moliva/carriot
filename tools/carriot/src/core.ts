@@ -1,21 +1,33 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as db from "./db";
+import * as notify from "./notify";
 import * as tmux from "./tmux";
 import { isStale, urgency, type AdapterResult, type AgentEvent, type SessionRow } from "./types";
 
 const STALE_UNTRACKED_MS = 12 * 3600_000;
 const PURGE_ENDED_MS = 7 * 24 * 3600_000;
 
-export function ingest(ev: AgentEvent) {
+export function ingest(ev: AgentEvent): { prev: SessionRow | null; next: SessionRow | null } {
   const needsTmux = ev.pane && (ev.refreshTmux || !db.getSession(ev.sessionId)?.window_id);
   const info = needsTmux ? tmux.paneInfo(ev.pane!) : {};
   const { prev, next } = db.apply(ev, info);
-  if (!next?.window_id) return;
+  if (!next?.window_id) return { prev, next };
   if (prev?.state !== next.state || prev?.mode !== next.mode || prev?.window_id !== next.window_id || (prev && isStale(prev))) {
     tmux.paintWindow(next.window_id, db.sessionsInWindow(next.window_id));
     if (prev?.window_id && prev.window_id !== next.window_id)
       tmux.paintWindow(prev.window_id, db.sessionsInWindow(prev.window_id));
+  }
+  return { prev, next };
+}
+
+/** Hook-driven changes only: resumes and background syncs go through ingest directly and never notify. */
+function ingestAndNotify(ev: AgentEvent) {
+  const { prev, next } = ingest(ev);
+  try {
+    notify.onChange(prev, next, next ? displayName(next) : ev.sessionId);
+  } catch (err) {
+    logError(err);
   }
 }
 
@@ -32,12 +44,12 @@ export function handle(agent: string, raw: string, adapt: (payload: any) => Adap
   const { event, response } = adapt(payload);
   if (!event) return response;
   if (!response) {
-    ingest(event);
+    ingestAndNotify(event);
     return;
   }
   // A failed write must not swallow the response: the PR gate's "ask" has to reach the agent.
   try {
-    ingest(event);
+    ingestAndNotify(event);
   } catch (err) {
     logError(err);
   }
