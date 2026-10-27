@@ -9,7 +9,7 @@ export type NotifyMode = "all" | "blocked" | "off";
 
 const MODE = (process.env.CARRIOT_NOTIFY ?? "all") as NotifyMode;
 const TERMINAL_APP = process.env.CARRIOT_TERMINAL_APP ?? "WezTerm";
-const ICON = `${process.env.HOME}/.local/share/claude/icon.png`;
+const ICON = process.env.CARRIOT_ICON ?? `${import.meta.dir}/../assets/icon.png`;
 const NEEDS_YOU: readonly State[] = [...BLOCKED, "waiting"];
 
 const group = (s: SessionRow) => `carriot-${s.id}`;

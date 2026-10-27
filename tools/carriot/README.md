@@ -96,6 +96,7 @@ Optional: `brew install glow git-delta` for nicer plan and diff rendering in the
 | `CARRIOT_PR_IGNORE_CHECKS` | `mergeable` | comma-separated check-name fragments that are not CI |
 | `CARRIOT_PR_IGNORE_AUTHORS` | `github-actions,linear-code,…` | comment authors that do not count as review activity |
 | `CARRIOT_NOTIFY` | `all` | `blocked` skips "your turn" notifications, `off` silences them |
+| `CARRIOT_ICON` | `assets/icon.png` | image shown on notifications (`assets/icon.svg` is its source) |
 | `CARRIOT_STALE_AFTER_HOURS` | `24` | no activity for this long moves a session to the idle group |
 | `CARRIOT_PR_GATE` | on | set to `0` to record PR previews without forcing a confirmation |
 | `CARRIOT_DEBUG` | off | log raw hook payloads to the `events` table (last 1000) |
