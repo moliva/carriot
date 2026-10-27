@@ -1,4 +1,6 @@
-import { join } from "node:path";
+import { spawn } from "node:child_process";
+import { mkdirSync, openSync } from "node:fs";
+import { dirname, join } from "node:path";
 import * as core from "./core";
 import * as db from "./db";
 import * as tmux from "./tmux";
@@ -33,8 +35,30 @@ function snapshot() {
   }));
 }
 
+const REPO_ROOT = join(import.meta.dir, "../../..");
+
+/** Commit the carriot checkout is on; compared with the one the server started from to spot stale code. */
+function headCommit(): string | null {
+  const p = Bun.spawnSync(["git", "-C", REPO_ROOT, "rev-parse", "--short", "HEAD"], { stdout: "pipe", stderr: "ignore" });
+  return p.exitCode === 0 ? p.stdout.toString().trim() : null;
+}
+
+/** Starts a fresh `carriot serve` on the same port, detached so it outlives this process. */
+function spawnReplacement(port: number) {
+  const dir = dirname(db.DB_PATH);
+  mkdirSync(dir, { recursive: true });
+  const log = openSync(join(dir, "serve.log"), "a");
+  spawn(process.execPath, [join(import.meta.dir, "cli.ts"), "serve", "--port", String(port)], {
+    detached: true,
+    stdio: ["ignore", log, log],
+    env: process.env,
+  }).unref();
+}
+
 export function serve(port: number) {
   const token = crypto.randomUUID();
+  const startedAt = Date.now();
+  const startedCommit = headCommit();
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   let lastReconcile = 0;
   const maybeReconcile = () => {
@@ -67,6 +91,20 @@ export function serve(port: number) {
         return new Response("forbidden", { status: 403 });
 
       if (url.pathname === "/api/stream") return stream(req.signal, maybeReconcile);
+      if (url.pathname === "/api/version") {
+        const current = headCommit();
+        return json({ startedAt, commit: startedCommit, current, stale: !!current && !!startedCommit && current !== startedCommit });
+      }
+      if (url.pathname === "/api/restart") {
+        if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
+        // Answer first, then free the port before the replacement binds it; the page waits and reloads.
+        setTimeout(() => {
+          server.stop(true);
+          spawnReplacement(port);
+          process.exit(0);
+        }, 150);
+        return json({ ok: true });
+      }
       if (url.pathname === "/api/sessions") {
         maybeReconcile();
         return json(snapshot());
