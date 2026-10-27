@@ -4,9 +4,19 @@ import * as db from "./db";
 import * as tmux from "./tmux";
 import { fileDiff } from "./pr";
 import { BLOCKED, isStale, label } from "./types";
+import { prLine, type PrStatus } from "./work";
 
 const PAGE = join(import.meta.dir, "../web/index.html");
 const RECONCILE_EVERY_MS = 10_000;
+
+/** Ticket and PR line for the dashboard, from what the PR watcher last recorded. */
+function workSummary(id: string) {
+  const w = db.getWork(id);
+  if (!w) return null;
+  const pr: PrStatus | null = w.pr ? JSON.parse(w.pr) : null;
+  const t = w.ticket ? db.getTicket(w.ticket) : null;
+  return { ticket: w.ticket, ticketTitle: t?.title ?? null, ticketStatus: t?.status ?? null, pr: pr ? prLine(pr) : null, prUrl: pr?.url ?? null, branch: w.branch };
+}
 
 function snapshot() {
   const artifacts = new Map<string, Record<string, number>>();
@@ -17,6 +27,7 @@ function snapshot() {
     label: label(s),
     location: core.location(s),
     stale: isStale(s),
+    work: workSummary(s.id),
     artifacts: artifacts.get(s.id) ?? {},
   }));
 }

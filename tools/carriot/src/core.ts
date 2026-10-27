@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import * as db from "./db";
 import * as notify from "./notify";
 import * as tmux from "./tmux";
-import { isStale, urgency, type AdapterResult, type AgentEvent, type SessionRow } from "./types";
+import { isStale, needsYou, urgency, type AdapterResult, type AgentEvent, type SessionRow } from "./types";
 
 const STALE_UNTRACKED_MS = 12 * 3600_000;
 const PURGE_ENDED_MS = 7 * 24 * 3600_000;
@@ -59,6 +59,8 @@ export function handle(agent: string, raw: string, adapt: (payload: any) => Adap
 function paint(...windowIds: (string | null | undefined)[]) {
   for (const w of new Set(windowIds)) if (w) tmux.paintWindow(w, db.sessionsInWindow(w));
 }
+
+export const repaint = (windowId: string | null | undefined) => paint(windowId);
 
 /** Records where a pane lives now and repaints the windows it left and joined. */
 function place(id: string, pane: string | null, info: tmux.PaneInfo | db.TmuxInfo = {}) {
@@ -252,7 +254,7 @@ export function sorted(order: SortOrder = "oldest"): SessionRow[] {
     .sort(
       (a, b) =>
         Number(isStale(a, now)) - Number(isStale(b, now)) ||
-        urgency(a.state) - urgency(b.state) ||
+        (needsYou(a) ? 0 : urgency(a.state)) - (needsYou(b) ? 0 : urgency(b.state)) ||
         (order === "oldest" ? a.state_since - b.state_since : b.state_since - a.state_since),
     );
 }
@@ -323,6 +325,12 @@ export function newAgent(opts: {
 
 /** Lost sessions from the last day are what "resume everything" brings back after a crash or reboot. */
 export const RESUME_LOST_WINDOW_MS = 24 * 3600_000;
+
+/** The session's conversation file under ~/.claude/projects, if Claude Code wrote one. */
+export function transcriptPath(s: SessionRow): string | null {
+  for (const path of new Bun.Glob(`*/${s.id}.jsonl`).scanSync({ cwd: `${process.env.HOME}/.claude/projects`, absolute: true })) return path;
+  return null;
+}
 
 /** Directory a session was started from: recorded by the hooks, else read from its conversation file. */
 export function launchDir(s: SessionRow): string | null {

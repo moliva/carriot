@@ -1,9 +1,10 @@
 import * as core from "./core";
 import * as db from "./db";
 import { fuzzyScore } from "./fuzzy";
+import { prBadge, prLine, type PrStatus } from "./work";
 import { ansiFg, COLOUR, DELTA_THEME, GLOW_STYLE } from "./palette";
 import * as tmux from "./tmux";
-import { BLOCKED, isStale, label, STALE_AFTER_MS, type SessionRow } from "./types";
+import { BLOCKED, isStale, needsYou, label, STALE_AFTER_MS, type SessionRow } from "./types";
 
 const ESC = "\x1b[";
 const A = {
@@ -24,11 +25,32 @@ const TABS: Tab[] = ["overview", "plan", "pr", "screen"];
 const TAB_NAME: Record<Tab, string> = { overview: "overview", plan: "plan", pr: "PR preview", screen: "terminal" };
 
 const kind = (s: SessionRow) =>
-  BLOCKED.includes(s.state) ? "blocked" : s.state === "waiting" ? "waiting" : s.mode === "plan" ? "planning" : "working";
+  needsYou(s) ? "blocked" : s.state === "waiting" ? "waiting" : s.mode === "plan" ? "planning" : "working";
 const tint = (s: SessionRow) =>
   s.state === "ended" ? A.grey : { blocked: A.red, waiting: A.amber, planning: A.blue, working: A.green }[kind(s)];
 const ended = (s: SessionRow) => s.state === "ended";
 const DAY = 24 * 3600_000;
+
+/** Ticket, branch and PR the watcher last recorded for a session. */
+function workOf(s: SessionRow): { ticket: string | null; branch: string | null; pr: PrStatus | null } {
+  const w = db.getWork(s.id);
+  return { ticket: w?.ticket ?? null, branch: w?.branch ?? null, pr: w?.pr ? JSON.parse(w.pr) : null };
+}
+
+function workLines(s: SessionRow): string[] {
+  const { ticket, branch, pr } = workOf(s);
+  const lines: string[] = [];
+  if (ticket) {
+    const t = db.getTicket(ticket);
+    lines.push(`${A.bold}${ticket}${A.reset}${t?.title ? ` ${t.title}` : ""}${t?.status ? ` ${A.grey}· ${t.status}${A.reset}` : ""}`);
+  }
+  if (pr) {
+    const badge = prBadge(pr);
+    const tone = badge.tone === "bad" ? A.red : badge.tone === "pending" ? A.amber : badge.tone === "good" ? A.green : A.grey;
+    lines.push(`${tone}${prLine(pr)}${A.reset} ${A.grey}· ${pr.url}${A.reset}`);
+  } else if (branch && branch !== "HEAD") lines.push(`${A.grey}branch ${branch} · no PR${A.reset}`);
+  return lines;
+}
 
 /** Idle sessions show when they were last active; active ones how long they have been in their state. */
 const ageOf = (s: SessionRow) => (isStale(s) ? s.updated_at : s.state_since);
@@ -151,7 +173,8 @@ const selected = () => allRows().find((s) => s.id === selectedId) ?? null;
 
 /** Short identifying fields match fuzzily; status and reply text only match the words as typed. */
 function matchScore(s: SessionRow, query: string): number | null {
-  const names = [core.displayName(s), s.title, core.location(s), s.agent, s.tmux_target, s.cwd?.replace(/^\/Users\/[^/]+/, "~")]
+  const work = workOf(s);
+  const names = [core.displayName(s), s.title, core.location(s), s.agent, s.tmux_target, s.cwd?.replace(/^\/Users\/[^/]+/, "~"), work.ticket, work.pr ? `#${work.pr.number}` : null]
     .filter(Boolean)
     .join(" ");
   const text = [label(s), s.detail, s.last_prompt].filter(Boolean).join(" ");
@@ -272,7 +295,10 @@ function listLines(width: number, height: number): string[] {
       );
       const detail = s.detail ? ` · ${s.detail.replace(/\s+/g, " ")}` : "";
       const status = gone ? endedLabel(s) : label(s);
-      lines.push(fit(`${bg}${marker}${A.reset}${bg}   ${gone && s.end_reason === "lost" ? A.amber : idle ? A.grey : tint(s)}${status}${A.reset}${bg}${A.grey}${detail}`, width, bg));
+      const pr = workOf(s).pr;
+      const badge = pr && !gone ? prBadge(pr) : null;
+      const badgeText = badge ? ` · ${badge.tone === "bad" ? A.red : badge.tone === "pending" ? A.amber : badge.tone === "good" ? A.green : A.grey}${badge.text}${A.reset}${bg}${A.grey}` : "";
+      lines.push(fit(`${bg}${marker}${A.reset}${bg}   ${gone && s.end_reason === "lost" ? A.amber : idle ? A.grey : tint(s)}${status}${A.reset}${bg}${A.grey}${badgeText}${detail}`, width, bg));
     }
   }
   if (sessions.length && !visibleSessions().length) lines.push("", ` ${A.grey}No sessions match /${filter}${A.reset}`, ` ${A.grey}esc clears the filter${A.reset}`);
@@ -332,6 +358,7 @@ function detailLines(width: number, height: number): string[] {
       ? `${A.bold}${core.displayName(s)}${A.reset}  ${s.end_reason === "lost" ? A.amber : A.grey}${A.bold}${endedLabel(s)}${A.reset} ${A.grey}${core.ago(s.ended_at ?? s.updated_at)} ago · enter resumes${A.reset}`
       : `${A.bold}${core.displayName(s)}${A.reset}  ${tint(s)}${A.bold}${label(s)}${A.reset} ${A.grey}for ${core.ago(s.state_since)}${A.reset}`,
     `${A.grey}${[s.agent, (s.cwd ?? "").replace(/^\/Users\/[^/]+/, "~"), s.tmux_target, s.mode && s.mode !== "default" ? `mode ${s.mode}` : null, s.id.slice(0, 8)].filter(Boolean).join(" · ")}${A.reset}`,
+    ...workLines(s),
     TABS.map((t, i) => {
       const on = available(s, t);
       const txt = ` ${i + 1} ${TAB_NAME[t]} `;
@@ -347,7 +374,7 @@ function detailLines(width: number, height: number): string[] {
   const shown = body.slice(scroll, scroll + contentHeight);
   if (maxScroll > 0) {
     const pct = Math.round((scroll / maxScroll) * 100);
-    head[3] = `${A.grey}${"─".repeat(Math.max(0, width - 8))} ${String(pct).padStart(3)}% ─${A.reset}`;
+    head[head.length - 1] = `${A.grey}${"─".repeat(Math.max(0, width - 8))} ${String(pct).padStart(3)}% ─${A.reset}`;
   }
   return [...head, ...shown];
 }

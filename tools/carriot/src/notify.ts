@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 import * as tmux from "./tmux";
 import { BLOCKED, type SessionRow, type State } from "./types";
+import type { PrStatus } from "./work";
 
 /** `all`: needs you and your turn; `blocked`: only states that stop the agent; `off`: nothing. */
 export type NotifyMode = "all" | "blocked" | "off";
@@ -60,8 +61,8 @@ function notifier(): string | null {
   return Bun.which("terminal-notifier");
 }
 
-function send(s: SessionRow, name: string) {
-  const { subtitle, body, urgent } = message(s);
+function send(s: SessionRow, name: string, msg = message(s)) {
+  const { subtitle, body, urgent } = msg;
   const tn = notifier();
   if (!tn) {
     Bun.spawn(["osascript", "-e", `display notification ${JSON.stringify(body)} with title ${JSON.stringify(name)} subtitle ${JSON.stringify(subtitle)}`], {
@@ -94,4 +95,13 @@ export function onChange(prev: SessionRow | null, next: SessionRow | null, name:
   if (shouldNotify(prev, next)) {
     if (!isWatched(next)) send(next, name);
   } else if (prev && NEEDS_YOU.includes(prev.state) && !NEEDS_YOU.includes(next.state)) clear(next);
+}
+
+/**
+ * PR activity on a session's branch (CI failing, review comments, approval, merge). Sent even while you watch the
+ * session's pane, since the agent's screen does not show what happens on GitHub.
+ */
+export function prChange(s: SessionRow, name: string, change: { subtitle: string; urgent: boolean }, pr: PrStatus) {
+  if (MODE === "off" || (MODE === "blocked" && !change.urgent)) return;
+  send(s, name, { subtitle: change.subtitle, body: `#${pr.number} ${pr.title}`, urgent: change.urgent });
 }

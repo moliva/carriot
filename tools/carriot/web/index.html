@@ -217,7 +217,7 @@ const ago = (ts) => {
   const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`;
 };
-const kind = (s) => s.stale ? "idle" : BLOCKED.includes(s.state) ? "blocked" : s.state === "waiting" ? "waiting" : s.mode === "plan" ? "planning" : "working";
+const kind = (s) => s.stale ? "idle" : BLOCKED.includes(s.state) || s.attention ? "blocked" : s.state === "waiting" ? "waiting" : s.mode === "plan" ? "planning" : "working";
 const shortCwd = (cwd) => (cwd || "").replace(/^\/Users\/[^/]+/, "~");
 const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 1800); };
 
@@ -311,6 +311,12 @@ async function renderMain(force = false) {
             s.location === "parked" ? "Unpark" : s.location === "background" ? "In background" : s.bg ? "Detach" : "Park") : null,
           s.pane || s.bg ? h("button", { class: "btn primary", onclick: () => api(`/api/sessions/${s.id}/jump`, { method: "POST" }).then(() => toast("Switched terminal"), (e) => toast(e.message)) }, s.location === "background" ? "Attach in terminal" : "Open in terminal") : null)),
       h("div", { class: "meta" }, [s.agent, s.location ? WHERE[s.location] : null, shortCwd(s.cwd), s.tmux_target, s.mode && s.mode !== "default" ? `mode: ${s.mode}` : null, s.id.slice(0, 8)].filter(Boolean).join(" · ")),
+      s.work && (s.work.ticket || s.work.pr) ? h("div", { class: "meta" },
+        s.work.ticket ? h("strong", {}, s.work.ticket) : null,
+        s.work.ticketTitle ? ` ${s.work.ticketTitle}` : "",
+        s.work.ticketStatus ? ` · ${s.work.ticketStatus}` : "",
+        s.work.ticket && s.work.pr ? " · " : "",
+        s.work.pr ? (s.work.prUrl ? h("a", { href: s.work.prUrl, target: "_blank", rel: "noopener" }, s.work.pr) : s.work.pr) : null) : null,
       h("div", { class: "tabs" }, tabs.map(([id, name, on]) =>
         h("button", { class: `tab ${tab === id ? "on" : ""}`, disabled: !on, onclick: () => { tab = id; renderMain(true); } }, name))),
     ),
