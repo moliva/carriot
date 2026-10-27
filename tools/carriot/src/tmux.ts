@@ -185,6 +185,11 @@ export function paintWindow(windowId: string, all: SessionRow[]) {
   else tmux("set-option", "-w", "-u", "-t", windowId, "@carriot_badge");
 }
 
+/** The pane is what someone sees: active pane of the active window of a session with a client attached. */
+export function paneOnScreen(pane: string): boolean {
+  return tmux("display-message", "-p", "-t", pane, "#{session_attached} #{window_active} #{pane_active}")?.match(/^([1-9]\d*) 1 1$/) != null;
+}
+
 export function jump(pane: string, focusTerminal: boolean) {
   tmux("switch-client", "-t", pane);
   tmux("select-window", "-t", pane);

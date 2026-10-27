@@ -27,6 +27,9 @@ const self = () => `${process.env.CARRIOT_BIN ?? "carriot"}`;
 
 const CHEATSHEET = (c: typeof C) => `${c.bold}CARRIOT CHEATSHEET${c.reset}  ${c.dim}one chariot, many horses: see who is pulling and who is waiting on you${c.reset}
 
+${c.bold}NOTIFICATIONS${c.reset}  when a session starts needing you and you are not looking at it; click jumps there
+  CARRIOT_NOTIFY=blocked skips "your turn", =off silences them
+
 ${c.bold}AFTER A REBOOT${c.reset}  sessions come back on their own once tmux restores its windows. If any are missing:
   prefix R (or R in reins) reopens everything lost in the last day; older ones: reins, e, then enter on each
 

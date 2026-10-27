@@ -11,6 +11,7 @@ const { fileDiff, flag, isPrCreate, prArtifact } = await import("../src/pr");
 const db = await import("../src/db");
 const core = await import("../src/core");
 const { fuzzyScore } = await import("../src/fuzzy");
+const { shouldNotify, message } = await import("../src/notify");
 const { isStale, STALE_AFTER_MS } = await import("../src/types");
 
 const env = { TMUX_PANE: undefined };
@@ -390,5 +391,32 @@ describe("palette", () => {
     for (const n of Object.values(COLOUR)) expect(n).toBeLessThan(16);
     expect(ansiFg(1)).toBe("\x1b[31m");
     expect(ansiFg(8)).toBe("\x1b[90m");
+  });
+});
+
+describe("notifications", () => {  const row = (state: string, detail: string | null = null) => ({ state, detail }) as any;
+
+  test("only a move into a state that needs you notifies", () => {
+    expect(shouldNotify(row("working"), row("needs_approval"), "all")).toBe(true);
+    expect(shouldNotify(row("working"), row("waiting"), "all")).toBe(true);
+    expect(shouldNotify(row("needs_approval"), row("needs_approval"), "all")).toBe(false);
+    expect(shouldNotify(row("waiting"), row("working"), "all")).toBe(false);
+  });
+
+  test("new and resumed sessions stay quiet", () => {
+    expect(shouldNotify(null, row("waiting"), "all")).toBe(false);
+    expect(shouldNotify(row("ended"), row("waiting"), "all")).toBe(false);
+  });
+
+  test("modes: blocked skips your-turn, off silences everything", () => {
+    expect(shouldNotify(row("working"), row("waiting"), "blocked")).toBe(false);
+    expect(shouldNotify(row("working"), row("plan_review"), "blocked")).toBe(true);
+    expect(shouldNotify(row("working"), row("question"), "off")).toBe(false);
+  });
+
+  test("the message says what is needed", () => {
+    expect(message(row("needs_approval", "Bash: rm -rf dist"))).toMatchObject({ subtitle: "Needs approval", body: "Bash: rm -rf dist", urgent: true });
+    expect(message(row("pr_review", "PR: feat: thing"))).toMatchObject({ subtitle: "PR ready for review", body: "feat: thing" });
+    expect(message(row("waiting", "Shall I commit?"))).toMatchObject({ subtitle: "Your turn", urgent: false });
   });
 });
