@@ -17,6 +17,8 @@ const A = {
   green: ansiFg(COLOUR.working),
   blue: ansiFg(COLOUR.planning),
   grey: ansiFg(COLOUR.idle),
+  underline: `${ESC}4m`,
+  noUnderline: `${ESC}24m`,
 };
 
 type Tab = "overview" | "plan" | "pr" | "screen";
@@ -34,8 +36,13 @@ const DAY = 24 * 3600_000;
 /** Ticket, branch and PR the watcher last recorded for a session. */
 function workOf(s: SessionRow): { ticket: string | null; branch: string | null; pr: PrStatus | null } {
   const w = db.getWork(s.id);
-  return { ticket: w?.ticket ?? null, branch: w?.branch ?? null, pr: w?.pr ? JSON.parse(w.pr) : null };
+  const pr: PrStatus | null = w?.pr ? JSON.parse(w.pr) : null;
+  if (pr && !pr.repo) pr.repo = w?.repo ?? null;
+  return { ticket: w?.ticket ?? null, branch: w?.branch ?? null, pr };
 }
+
+/** Clickable terminal hyperlink (OSC 8); tmux passes it through when the outer terminal has the hyperlinks feature. */
+const link = (url: string, text: string) => `\x1b]8;;${url}\x07${text}\x1b]8;;\x07`;
 
 function workLines(s: SessionRow): string[] {
   const { ticket, branch, pr } = workOf(s);
@@ -47,7 +54,7 @@ function workLines(s: SessionRow): string[] {
   if (pr) {
     const badge = prBadge(pr);
     const tone = badge.tone === "bad" ? A.red : badge.tone === "pending" ? A.amber : badge.tone === "good" ? A.green : A.grey;
-    lines.push(`${tone}${prLine(pr)}${A.reset} ${A.grey}· ${pr.url}${A.reset}`);
+    lines.push(`${tone}${prLine(pr, (ref) => `${A.underline}${link(pr.url, ref)}${A.noUnderline}`)}${A.reset}`);
   } else if (branch && branch !== "HEAD") lines.push(`${A.grey}branch ${branch} · no PR${A.reset}`);
   return lines;
 }
@@ -96,7 +103,8 @@ function fit(line: string, width: number, bg = ""): string {
     w += cw;
     i += ch.length;
   }
-  return `${out}${A.reset}${bg}${" ".repeat(Math.max(0, width - w))}`;
+  // Close any hyperlink a cut-off line may have left open, so it cannot spill into the padding or the next column.
+  return `${out}\x1b]8;;\x07${A.reset}${bg}${" ".repeat(Math.max(0, width - w))}`;
 }
 
 function wrap(text: string, width: number): string[] {
@@ -297,7 +305,9 @@ function listLines(width: number, height: number): string[] {
       const status = gone ? endedLabel(s) : label(s);
       const pr = workOf(s).pr;
       const badge = pr && !gone ? prBadge(pr) : null;
-      const badgeText = badge ? ` · ${badge.tone === "bad" ? A.red : badge.tone === "pending" ? A.amber : badge.tone === "good" ? A.green : A.grey}${badge.text}${A.reset}${bg}${A.grey}` : "";
+      const badgeText = badge
+        ? ` · ${badge.tone === "bad" ? A.red : badge.tone === "pending" ? A.amber : badge.tone === "good" ? A.green : A.grey}${link(pr!.url, badge.ref)}${badge.rest}${A.reset}${bg}${A.grey}`
+        : "";
       lines.push(fit(`${bg}${marker}${A.reset}${bg}   ${gone && s.end_reason === "lost" ? A.amber : idle ? A.grey : tint(s)}${status}${A.reset}${bg}${A.grey}${badgeText}${detail}`, width, bg));
     }
   }

@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 import * as tmux from "./tmux";
 import { BLOCKED, type SessionRow, type State } from "./types";
-import type { PrStatus } from "./work";
+import { prRef, type PrStatus } from "./work";
 
 /** `all`: needs you and your turn; `blocked`: only states that stop the agent; `off`: nothing. */
 export type NotifyMode = "all" | "blocked" | "off";
@@ -103,5 +103,5 @@ export function onChange(prev: SessionRow | null, next: SessionRow | null, name:
  */
 export function prChange(s: SessionRow, name: string, change: { subtitle: string; urgent: boolean }, pr: PrStatus) {
   if (MODE === "off" || (MODE === "blocked" && !change.urgent)) return;
-  send(s, name, { subtitle: change.subtitle, body: `#${pr.number} ${pr.title}`, urgent: change.urgent });
+  send(s, name, { subtitle: change.subtitle, body: `${prRef(pr)} ${pr.title}`, urgent: change.urgent });
 }
