@@ -43,6 +43,18 @@ aside { border-right: 1px solid var(--border); background: var(--panel); display
 .top h1 { font-size: 15px; margin: 0 0 6px; display: flex; align-items: center; gap: 8px; }
 .top h1 .live { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .top h1 .live.on { background: var(--green); }
+.collapse { margin-left: auto; background: none; border: 1px solid var(--border); border-radius: 6px; width: 26px; height: 24px; padding: 0; color: var(--muted); font-size: 13px; line-height: 1; }
+.collapse:hover { color: var(--text); background: var(--panel-2); }
+.app.collapsed { grid-template-columns: 52px 1fr; }
+.app.collapsed .top { padding: 12px 0 8px; }
+.app.collapsed .top h1 { flex-direction: column; gap: 10px; margin: 0; }
+.app.collapsed .brand, .app.collapsed .counts, .app.collapsed .tools, .app.collapsed .group, .app.collapsed .card .name, .app.collapsed .card .age,
+.app.collapsed .card .l2, .app.collapsed .card .detail { display: none; }
+.app.collapsed .collapse { margin: 0; }
+.app.collapsed .list { padding: 6px 4px; }
+.app.collapsed .card { display: flex; justify-content: center; padding: 10px 0; }
+.app.collapsed .card .l1 { justify-content: center; }
+.app.collapsed .card.sel { border-color: var(--accent); }
 .counts { display: flex; gap: 6px; flex-wrap: wrap; }
 .pill { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
 .pill.red { color: var(--red); background: var(--red-bg); border-color: transparent; }
@@ -125,7 +137,7 @@ main { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 .file { margin-bottom: 16px; }
 .d2h-wrapper { max-width: 100%; } .d2h-file-wrapper { border-radius: 8px; margin-bottom: 0; }
 .file .d2h-file-header { position: sticky; top: 0; z-index: 3; }
-.file-actions { margin-left: auto; display: flex; gap: 6px; padding-left: 8px; } .file-actions .btn { padding: 1px 8px; font-size: 12px; }
+.file-actions { margin-left: auto; display: flex; gap: 6px; padding-left: 8px; } .file-actions .btn { padding: 1px 8px; font-size: 12px; white-space: nowrap; }
 .d2h-code-line-ctn.hljs { background: transparent; }
 td.d2h-code-linenumber:not(.d2h-info), td.d2h-code-side-linenumber:not(.d2h-info):not(.d2h-code-side-emptyplaceholder) { cursor: pointer; }
 td.d2h-code-linenumber:not(.d2h-info):hover, td.d2h-code-side-linenumber:not(.d2h-info):not(.d2h-code-side-emptyplaceholder):hover { background: var(--blue-bg); color: var(--blue); }
@@ -150,6 +162,7 @@ td.d2h-code-linenumber:not(.d2h-info):hover, td.d2h-code-side-linenumber:not(.d2
 @media (max-width: 760px) {
   .app { grid-template-columns: 1fr; height: auto; }
   aside { border-right: 0; border-bottom: 1px solid var(--border); max-height: 45vh; }
+  .app.collapsed { grid-template-columns: 1fr; } .app.collapsed .list { display: none; }
   .head, .body, .reply { padding-left: 16px; padding-right: 16px; }
   .actions { margin-left: 0; }
 }
@@ -162,7 +175,7 @@ td.d2h-code-linenumber:not(.d2h-info):hover, td.d2h-code-side-linenumber:not(.d2
 <div class="app">
   <aside>
     <div class="top">
-      <h1><span class="live" id="live"></span>carriot</h1>
+      <h1><span class="live" id="live"></span><span class="brand">carriot</span><button class="collapse" id="collapse"></button></h1>
       <div class="counts" id="counts"></div>
       <div class="tools">
         <button id="notify">Enable notifications</button>
@@ -238,7 +251,7 @@ function renderList() {
     if (!items.length) continue;
     list.append(h("div", { class: "group" }, `${title} · ${items.length}`));
     for (const s of items) {
-      list.append(h("button", { class: `card s-${kind(s)} ${s.id === selected ? "sel" : ""}`, onclick: () => select(s.id) },
+      list.append(h("button", { class: `card s-${kind(s)} ${s.id === selected ? "sel" : ""}`, title: `${s.display_name} · ${s.label}`, onclick: () => select(s.id) },
         h("div", { class: "l1" }, h("span", { class: "dot" }), h("span", { class: "name", title: s.display_name }, s.display_name), h("span", { class: "age", "data-ts": s.state_since }, ago(s.state_since))),
         h("div", { class: "l2" }, h("span", { class: "state" }, s.label),
           s.agent !== "claude" ? h("span", { class: "chip" }, s.agent) : null,
@@ -677,6 +690,16 @@ $("#theme").addEventListener("click", () => {
   themeChanged();
 });
 try { const t = localStorage.getItem("carriot-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+function setCollapsed(on) {
+  $(".app").classList.toggle("collapsed", on);
+  $("#collapse").textContent = on ? "»" : "«";
+  $("#collapse").title = on ? "Expand sessions ([)" : "Collapse sessions ([)";
+  try { localStorage.setItem("carriot-collapsed", on ? "1" : ""); } catch {}
+}
+$("#collapse").addEventListener("click", () => setCollapsed(!$(".app").classList.contains("collapsed")));
+let startCollapsed = false;
+try { startCollapsed = localStorage.getItem("carriot-collapsed") === "1"; } catch {}
+setCollapsed(startCollapsed);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", themeChanged);
 syncHljs();
 window.addEventListener("hashchange", () => { const id = decodeURIComponent(location.hash.slice(1)); if (id && id !== selected) select(id); });
@@ -686,6 +709,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "j" && i < sessions.length - 1) select(sessions[i + 1].id);
   if (e.key === "k" && i > 0) select(sessions[i - 1].id);
   if (e.key === "o" && selected) $(".btn.primary")?.click();
+  if (e.key === "[") setCollapsed(!$(".app").classList.contains("collapsed"));
 });
 setInterval(() => { for (const el of document.querySelectorAll("[data-ts]")) el.textContent = ago(Number(el.dataset.ts)); }, 1000);
 connect();
