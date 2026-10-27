@@ -2,9 +2,17 @@ import type { TmuxInfo } from "./db";
 import { COLOUR } from "./palette";
 import { BLOCKED, isStale, type SessionRow } from "./types";
 
+/**
+ * Without a UTF-8 locale (processes WezTerm or macOS start, such as the dashboard or a notification click) tmux
+ * prints tabs and non-ASCII as "_", which garbles every tab-separated listing. Force one when none is set.
+ */
+const TMUX_ENV = /utf-?8/i.test(process.env.LC_ALL || process.env.LC_CTYPE || process.env.LANG || "")
+  ? process.env
+  : { ...process.env, LC_CTYPE: "en_US.UTF-8" };
+
 function tmux(...args: string[]): string | null {
   try {
-    const p = Bun.spawnSync(["tmux", ...args], { stdout: "pipe", stderr: "ignore" });
+    const p = Bun.spawnSync(["tmux", ...args], { stdout: "pipe", stderr: "ignore", env: TMUX_ENV });
     return p.exitCode === 0 ? p.stdout.toString().trimEnd() : null;
   } catch {
     return null;
@@ -199,7 +207,11 @@ export function sendText(pane: string, text: string, opts: { escapeFirst?: boole
   if (text.includes("\n")) {
     // Bracketed paste keeps a multi-line message in one prompt instead of submitting it line by line.
     const buffer = `carriot-${process.pid}`;
-    const load = Bun.spawnSync(["tmux", "load-buffer", "-b", buffer, "-"], { stdin: new TextEncoder().encode(text), stderr: "ignore" });
+    const load = Bun.spawnSync(["tmux", "load-buffer", "-b", buffer, "-"], {
+      stdin: new TextEncoder().encode(text),
+      stderr: "ignore",
+      env: TMUX_ENV,
+    });
     if (load.exitCode !== 0 || tmux("paste-buffer", "-p", "-d", "-b", buffer, "-t", pane) === null) return false;
     Bun.sleepSync(150);
   } else if (tmux("send-keys", "-t", pane, "-l", text) === null) return false;
