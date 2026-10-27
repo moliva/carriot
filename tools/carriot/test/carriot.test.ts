@@ -477,6 +477,11 @@ describe("tickets and PRs", () => {
     expect(s.review).toBe("CHANGES_REQUESTED");
   });
 
+  test("PR references read repo#number and the line lets callers wrap the reference", () => {
+    expect(work.prRef(pr({ repo: "acme/infra" }))).toBe("infra#7");
+    expect(work.prLine(pr({ repo: "acme/infra" }), (r) => `[${r}]`)).toStartWith("[infra#7] · open · CI 3/3 passed");
+  });
+
   test("the first look is a quiet baseline", () => {
     expect(work.diffPr(null, pr({ checks: { failed: 2, pending: 0, passed: 0, total: 2 } }))).toEqual({ attention: null, notify: null });
   });
@@ -493,7 +498,8 @@ describe("tickets and PRs", () => {
   });
 
   test("badges summarise CI and review", () => {
-    expect(work.prBadge(pr({ review: "CHANGES_REQUESTED" }))).toEqual({ text: "#7 ✓ changes", tone: "bad" });
+    expect(work.prBadge(pr({ review: "CHANGES_REQUESTED" }))).toMatchObject({ text: "#7 ✓ changes", tone: "bad" });
+    expect(work.prBadge(pr({ repo: "acme/infra", review: "APPROVED" }))).toMatchObject({ ref: "infra#7", rest: " ✓ approved", text: "infra#7 ✓ approved" });
     expect(work.prBadge(pr({ checks: { failed: 0, pending: 2, passed: 1, total: 3 } })).tone).toBe("pending");
   });
 

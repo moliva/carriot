@@ -10,6 +10,8 @@ export interface Work {
 }
 
 export interface PrStatus {
+  /** owner/name; older records may lack it (the work row's repo fills in). */
+  repo?: string | null;
   number: number;
   url: string;
   title: string;
@@ -126,21 +128,30 @@ export function diffPr(prev: PrStatus | null, next: PrStatus | null): Change {
 }
 
 /** Short PR badge for list rows, e.g. "#9936 ✓ changes". */
-export function prBadge(pr: PrStatus): { text: string; tone: "bad" | "pending" | "good" | "neutral" } {
-  if (pr.state === "MERGED") return { text: `#${pr.number} merged`, tone: "neutral" };
-  if (pr.state === "CLOSED") return { text: `#${pr.number} closed`, tone: "neutral" };
+/** "infra#9936": the repo's short name and the PR number, like GitHub writes cross-repo references. */
+export const prRef = (pr: PrStatus) => `${pr.repo ? basename(pr.repo) : ""}#${pr.number}`;
+
+/** Short PR badge for list rows, e.g. "infra#9936 ✓ changes"; `ref` is the part worth linking. */
+export function prBadge(pr: PrStatus): { ref: string; rest: string; text: string; tone: "bad" | "pending" | "good" | "neutral" } {
+  const ref = prRef(pr);
+  const badge = (rest: string, tone: "bad" | "pending" | "good" | "neutral") => ({ ref, rest, text: `${ref}${rest}`, tone });
+  if (pr.state === "MERGED") return badge(" merged", "neutral");
+  if (pr.state === "CLOSED") return badge(" closed", "neutral");
   const ci = pr.checks.failed ? "✗" : pr.checks.pending ? "…" : pr.checks.total ? "✓" : "";
   const review = pr.review === "CHANGES_REQUESTED" ? " changes" : pr.review === "APPROVED" ? " approved" : "";
   const tone = pr.checks.failed || pr.review === "CHANGES_REQUESTED" ? "bad" : pr.checks.pending ? "pending" : pr.review === "APPROVED" ? "good" : "neutral";
-  return { text: `#${pr.number}${pr.draft ? " draft" : ""}${ci ? ` ${ci}` : ""}${review}`, tone };
+  return badge(`${pr.draft ? " draft" : ""}${ci ? ` ${ci}` : ""}${review}`, tone);
 }
 
-/** One line for the detail pane, e.g. "PR #9936 · open · CI 14/14 passed · changes requested · 3 comments". */
-export function prLine(pr: PrStatus): string {
+/**
+ * One line for the detail pane, e.g. "infra#9936 · open · CI 14/14 passed · changes requested · 3 comments";
+ * `ref` formats the reference (reins turns it into a link).
+ */
+export function prLine(pr: PrStatus, ref: (text: string) => string = (t) => t): string {
   const c = pr.checks;
   const ci = !c.total ? "no checks" : c.failed ? `CI ${c.failed} failing` : c.pending ? `CI ${c.pending} running` : `CI ${c.passed}/${c.total} passed`;
   const review = pr.review ? pr.review.toLowerCase().replace(/_/g, " ") : null;
-  return [`PR #${pr.number}`, pr.draft ? "draft" : pr.state.toLowerCase(), pr.state === "OPEN" ? ci : null, review, pr.activity ? `${pr.activity} comments` : null]
+  return [ref(prRef(pr)), pr.draft ? "draft" : pr.state.toLowerCase(), pr.state === "OPEN" ? ci : null, review, pr.activity ? `${pr.activity} comments` : null]
     .filter(Boolean)
     .join(" · ");
 }
@@ -194,7 +205,7 @@ export function inspect(cwd: string | null): Work {
   const json = run(["gh", "pr", "view", ref, "--repo", work.repo, "--json", PR_FIELDS]);
   if (json) {
     try {
-      work.pr = summarizePr(JSON.parse(json), me());
+      work.pr = { ...summarizePr(JSON.parse(json), me()), repo: work.repo };
     } catch {}
   }
   return work;
