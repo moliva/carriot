@@ -116,6 +116,7 @@ export function reconcile(opts: { background?: boolean } = {}) {
   const server = panes ? tmux.serverPid() : null;
   const now = Date.now();
   const dead: string[] = [];
+  const missingIds = new Set<string>();
   for (const s of db.liveSessions()) {
     // Pane ids restart with a new tmux server (reboot, kill-server), so an old id may now name an unrelated pane.
     if (s.pane && server && s.tmux_server && s.tmux_server !== server) {
@@ -131,9 +132,19 @@ export function reconcile(opts: { background?: boolean } = {}) {
     const p = panes.get(s.pane);
     if (!p) {
       if (s.bg) place(s.id, null);
-      else dead.push(s.id);
+      else {
+        dead.push(s.id);
+        missingIds.add(s.id);
+      }
     } else if (p.windowId !== s.window_id || p.target !== s.tmux_target || p.name !== s.name || !s.tmux_server)
       place(s.id, s.pane, p);
+  }
+  // Every tracked pane vanishing at once under the same server is far likelier a misread tmux listing than a mass
+  // exit (a restarted server is caught above), so keep the sessions and leave a trace instead.
+  const tracked = db.liveSessions().filter((s) => s.pane && !s.bg).length;
+  if (panes && tracked >= 3 && missingIds.size === tracked) {
+    logError(new Error(`reconcile: all ${tracked} tracked panes missing from ${panes.size} listed; keeping them`));
+    dead.splice(0, dead.length, ...dead.filter((id) => !missingIds.has(id)));
   }
   db.markEnded(dead, "lost");
   db.purgeEnded(PURGE_ENDED_MS);
