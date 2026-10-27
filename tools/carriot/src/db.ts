@@ -58,6 +58,10 @@ CREATE TABLE IF NOT EXISTS tickets (
   url TEXT,
   fetched_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   agent TEXT,
@@ -299,7 +303,8 @@ export function putTicket(t: Omit<TicketRow, "fetched_at">) {
   open()
     .query(
       `INSERT INTO tickets (id, title, status, url, fetched_at) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, url = excluded.url, fetched_at = excluded.fetched_at`,
+       ON CONFLICT(id) DO UPDATE SET title = coalesce(excluded.title, title), status = coalesce(excluded.status, status),
+         url = coalesce(excluded.url, url), fetched_at = excluded.fetched_at`,
     )
     .run(t.id, t.title, t.status, t.url, Date.now());
 }
@@ -313,4 +318,19 @@ export function setAttention(id: string, reason: string | null) {
       "UPDATE sessions SET attention = ?, attention_since = ?, updated_at = CASE WHEN ? IS NULL THEN updated_at ELSE ? END WHERE id = ?",
     )
     .run(reason, reason ? now : null, reason, now, id);
+}
+
+/** Records a ticket's URL learned elsewhere (a PR link) without touching its title or status. */
+export function setTicketUrl(id: string, url: string) {
+  open()
+    .query("INSERT INTO tickets (id, url, fetched_at) VALUES (?, ?, 0) ON CONFLICT(id) DO UPDATE SET url = excluded.url")
+    .run(id, url);
+}
+
+export function getSetting(key: string): string | null {
+  return open().query<{ value: string | null }, [string]>("SELECT value FROM settings WHERE key = ?").get(key)?.value ?? null;
+}
+
+export function putSetting(key: string, value: string) {
+  open().query("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
 }

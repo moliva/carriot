@@ -49,7 +49,9 @@ function workLines(s: SessionRow): string[] {
   const lines: string[] = [];
   if (ticket) {
     const t = db.getTicket(ticket);
-    lines.push(`${A.bold}${ticket}${A.reset}${t?.title ? ` ${t.title}` : ""}${t?.status ? ` ${A.grey}· ${t.status}${A.reset}` : ""}`);
+    const url = core.ticketLink(ticket);
+    const id = url ? `${A.underline}${link(url, ticket)}${A.noUnderline}` : ticket;
+    lines.push(`${A.bold}${id}${A.reset}${t?.title ? ` ${t.title}` : ""}${t?.status ? ` ${A.grey}· ${t.status}${A.reset}` : ""}`);
   }
   if (pr) {
     const badge = prBadge(pr);

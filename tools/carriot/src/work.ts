@@ -7,6 +7,30 @@ export interface Work {
   branch: string | null;
   ticket: string | null;
   pr: PrStatus | null;
+  /** Linear issue links found in the PR's description and comments. */
+  links: LinearLink[];
+}
+
+export interface LinearLink {
+  id: string;
+  url: string;
+  workspace: string;
+}
+
+/** Linear issue links in free text (PR bodies, bot comments); they also reveal the Linear workspace name. */
+export function linearLinks(texts: (string | null | undefined)[]): LinearLink[] {
+  const seen = new Map<string, LinearLink>();
+  for (const text of texts)
+    for (const m of (text ?? "").matchAll(/https:\/\/linear\.app\/([\w-]+)\/issue\/([A-Za-z][A-Za-z0-9]*-\d+)/g)) {
+      const id = m[2].toUpperCase();
+      if (!seen.has(id)) seen.set(id, { id, url: `https://linear.app/${m[1]}/issue/${id}`, workspace: m[1] });
+    }
+  return [...seen.values()];
+}
+
+/** A ticket's Linear URL: the one recorded for it, else built from the workspace name. */
+export function ticketUrl(id: string, known: string | null, workspace: string | null): string | null {
+  return known ?? (workspace ? `https://linear.app/${workspace}/issue/${id}` : null);
 }
 
 export interface PrStatus {
@@ -173,7 +197,7 @@ function me(): string | null {
   return login;
 }
 
-const PR_FIELDS = "number,url,title,state,isDraft,reviewDecision,statusCheckRollup,comments,reviews";
+const PR_FIELDS = "number,url,title,body,state,isDraft,reviewDecision,statusCheckRollup,comments,reviews";
 
 /**
  * Where a session does its work: its current directory when that is inside a carriot session folder, else the last
@@ -193,7 +217,7 @@ export function workDir(cwd: string | null, transcript: string | null): string |
 
 /** Looks up what a session's directory is working on. Network: one `gh pr view` when there is a branch or review PR. */
 export function inspect(cwd: string | null): Work {
-  const work: Work = { repo: null, branch: null, ticket: null, pr: null };
+  const work: Work = { repo: null, branch: null, ticket: null, pr: null, links: [] };
   if (!cwd) return work;
   const remote = run(["git", "-C", cwd, "remote", "get-url", "origin"]);
   work.repo = remote ? repoFromRemote(remote) : null;
@@ -205,7 +229,9 @@ export function inspect(cwd: string | null): Work {
   const json = run(["gh", "pr", "view", ref, "--repo", work.repo, "--json", PR_FIELDS]);
   if (json) {
     try {
-      work.pr = { ...summarizePr(JSON.parse(json), me()), repo: work.repo };
+      const data = JSON.parse(json);
+      work.pr = { ...summarizePr(data, me()), repo: work.repo };
+      work.links = linearLinks([data.body, ...(data.comments ?? []).map((c: any) => c.body), ...(data.reviews ?? []).map((r: any) => r.body)]);
     } catch {}
   }
   return work;
