@@ -67,6 +67,15 @@ When given a PR URL or branch to review:
 8. **Offer teardown** — since review sessions are one-time use, proactively offer to remove the worktree and session directory once the review is done.
 9. If the PR references changes needed in **another repo** (and a specific non-default branch), set up an additional worktree in the same session directory for that repo.
 
+## Carriot tool
+
+`tools/carriot` (with `bin/carriot`) tracks every agent session and powers the hooks in `.claude/settings.json`, the tmux and WezTerm bindings, and auto-resume after tmux restores. It runs straight from this working tree, so:
+
+- Never switch `~/carriot` to a branch that lacks `tools/carriot` (e.g. a stale local `main`); the hooks of every running session break.
+- Work on carriot itself in a worktree (`sessions/<name>/carriot`), not by switching branches in `~/carriot`; other sessions may be editing it.
+
+See `tools/carriot/README.md`.
+
 ## Adding a new repo
 
 Use the helper script — never clone manually:

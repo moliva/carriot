@@ -24,3 +24,7 @@ bind X confirm-before -p "close this agent and its pane? (y/n)" "run-shell 'TMUX
 
 # prefix R: after a crash or reboot, reopen every session lost in the last day (claude --resume).
 bind R confirm-before -p "resume every session lost in the last day? (y/n)" "run-shell 'TMUX_PANE=#{pane_id} ~/carriot/bin/carriot resume --lost'"
+
+# After tmux-resurrect restores (including continuum's automatic restore when tmux starts), reopen every session
+# lost in the last day into its restored window. Remove this line to resume by hand with prefix R instead.
+set -g @resurrect-hook-post-restore-all "$HOME/carriot/bin/carriot resume --lost"

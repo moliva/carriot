@@ -22,6 +22,8 @@ A session with no hook activity (prompt, tool call, reply) for 24 hours is **idl
 
 ## Resume after a crash or reboot
 
+**After a reboot you don't need to do anything.** tmux-continuum restores your windows when tmux starts, and tmux-resurrect then runs `carriot resume --lost` (the `@resurrect-hook-post-restore-all` line in `carriot.tmux`), which reopens every session lost in the last day in its restored window. If one is missing: `prefix R` (or `R` in reins) resumes everything lost in the last day; for older ones open reins, press `e`, and `enter` on each.
+
 Carriot records how each session ended: **lost** (its pane or tmux server vanished without the agent exiting on purpose: crash, reboot, killed window), **closed** (`carriot close`), **exited** (`/exit`, Ctrl-D) or replaced (`/clear`, `/resume`). Pane ids restart with a new tmux server, so each session also remembers which server it ran under; a restart can't make an old session look alive in an unrelated pane.
 
 - **Reins** lists sessions lost in the last day in a LOST group, with a `↻ N lost` hint in the header. `enter` resumes one, `R` resumes all of them, `e` shows every session ended in the last week.
@@ -84,6 +86,10 @@ Optional: `brew install glow git-delta` for nicer plan and diff rendering in the
 | `CARRIOT_TERMINAL_APP` | `WezTerm` | app brought to front when jumping from the dashboard |
 
 Hook failures are appended to `errors.log` next to the database and never affect the agent.
+
+## Keep it checked out
+
+Carriot runs from this repo's working tree: the hooks in `.claude/settings.json`, the tmux and WezTerm bindings and the resurrect hook all call `bin/carriot`. Keep a branch that contains `tools/carriot` checked out in `~/carriot` (main has it); switching to one without it breaks the hooks until you switch back.
 
 ## Development
 

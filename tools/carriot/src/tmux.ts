@@ -63,11 +63,12 @@ const SHELLS = new Set(["zsh", "bash", "fish", "sh", "-zsh", "-bash"]);
  * A window tmux-resurrect brought back after a restart: same name, a single pane sitting at a shell, not used by
  * any live session. Resuming into it avoids a duplicate window next to the empty restored one.
  */
-export function restoredShell(name: string, taken: Set<string>): string | null {
-  for (const [pane, info] of panes() ?? [])
-    if (info.name === name && info.alone && SHELLS.has(info.command ?? "") && info.session !== PARK && !taken.has(pane))
-      return pane;
-  return null;
+export function restoredShell(name: string, taken: Set<string>, session?: string): string | null {
+  const candidates = [...(panes() ?? [])].filter(
+    ([pane, info]) => info.name === name && info.alone && SHELLS.has(info.command ?? "") && !taken.has(pane),
+  );
+  // Prefer the tmux session it lived in (the park session included), then any other one.
+  return (candidates.find(([, info]) => info.session === session) ?? candidates.find(([, info]) => info.session !== PARK))?.[0] ?? null;
 }
 
 /** Replaces whatever runs in a pane with `command`, keeping the window where it is. */
@@ -195,10 +196,12 @@ export function sendText(pane: string, text: string): boolean {
 }
 
 /** Opens a window right after the current one (or in the first session outside tmux) and selects it. */
-export function newWindow(opts: { cwd?: string; name: string; command?: string }): string | null {
+export function newWindow(opts: { cwd?: string; name: string; command?: string; session?: string }): string | null {
   const pane = process.env.TMUX_PANE;
   const window = pane ? tmux("display-message", "-p", "-t", pane, "#{window_id}") : null;
-  const placement = window ? ["-a", "-t", window] : ["-t", `=${fallbackSession() ?? ""}:`];
+  // Without a pane to sit next to (a tmux hook), go back to the session it came from.
+  const home = opts.session && tmux("has-session", "-t", `=${opts.session}`) !== null ? opts.session : null;
+  const placement = home && !window ? ["-d", "-t", `=${home}:`] : window ? ["-a", "-t", window] : ["-t", `=${fallbackSession() ?? ""}:`];
   const cwd = opts.cwd ?? (pane ? tmux("display-message", "-p", "-t", pane, "#{pane_current_path}") : null);
   return tmux("new-window", "-P", "-F", "#{pane_id}", ...placement, "-n", opts.name, ...(cwd ? ["-c", cwd] : []), ...(opts.command ? [opts.command] : []));
 }

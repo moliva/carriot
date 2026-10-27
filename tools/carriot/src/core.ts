@@ -337,8 +337,9 @@ export function resume(s: SessionRow): { ok: boolean; message: string; pane?: st
   }
   const command = windowCommand([...flags, "--resume", s.id]);
   const taken = new Set(db.liveSessions().map((x) => x.pane).filter((p): p is string => !!p));
-  const restored = tmux.restoredShell(name, taken);
-  const pane = restored && tmux.respawn(restored, cwd, command) ? restored : tmux.newWindow({ cwd, name, command });
+  const session = s.tmux_target?.split(":")[0] || undefined;
+  const restored = tmux.restoredShell(name, taken, session);
+  const pane = restored && tmux.respawn(restored, cwd, command) ? restored : tmux.newWindow({ cwd, name, command, session });
   if (!pane) return { ok: false, message: "Could not open a tmux window (is tmux running?)." };
   // Revive the row now; the resumed session's own hooks keep it current from here.
   ingest({ agent: s.agent, sessionId: s.id, state: "waiting", pane, refreshTmux: true });
