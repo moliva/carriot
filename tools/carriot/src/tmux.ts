@@ -1,6 +1,6 @@
 import type { TmuxInfo } from "./db";
 import { COLOUR } from "./palette";
-import { BLOCKED, isStale, type SessionRow } from "./types";
+import { isStale, needsYou, type SessionRow } from "./types";
 
 /**
  * Without a UTF-8 locale (processes WezTerm or macOS start, such as the dashboard or a notification click) tmux
@@ -177,7 +177,7 @@ export function paintWindow(windowId: string, all: SessionRow[]) {
   // Idle sessions only count when the window has nothing active.
   const sessions = all.filter((s) => !isStale(s));
   let kind = all.length && !sessions.length ? "idle" : "";
-  if (sessions.some((s) => BLOCKED.includes(s.state))) kind = "blocked";
+  if (sessions.some(needsYou)) kind = "blocked";
   else if (sessions.some((s) => s.state === "waiting")) kind = "waiting";
   else if (sessions.some((s) => s.state === "working" && s.mode === "plan")) kind = "planning";
   else if (sessions.some((s) => s.state === "working")) kind = "working";

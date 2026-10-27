@@ -28,3 +28,7 @@ bind R confirm-before -p "resume every session lost in the last day? (y/n)" "run
 # After tmux-resurrect restores (including continuum's automatic restore when tmux starts), reopen every session
 # lost in the last day into its restored window. Remove this line to resume by hand with prefix R instead.
 set -g @resurrect-hook-post-restore-all "$HOME/carriot/bin/carriot resume --lost"
+
+# PR watcher: checks each session's PR every 2 minutes (CI, reviews, comments) and flags sessions that need you.
+# Only one copy runs; reloading tmux leaves the running one in place.
+run-shell -b "$HOME/carriot/bin/carriot watch"

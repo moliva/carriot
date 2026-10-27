@@ -7,7 +7,7 @@ import * as core from "./core";
 import * as db from "./db";
 import { ansiFg, COLOUR, DELTA_THEME, GLOW_STYLE } from "./palette";
 import * as tmux from "./tmux";
-import { BLOCKED, isStale, label, type SessionRow, type State } from "./types";
+import { BLOCKED, isStale, label, needsYou, type SessionRow, type State } from "./types";
 
 const ADAPTERS: Record<string, (payload: any) => ReturnType<typeof claude>> = { claude };
 
@@ -21,11 +21,14 @@ const C = {
   reset: "\x1b[0m",
 };
 const color = (s: SessionRow) =>
-  isStale(s) ? C.dim : BLOCKED.includes(s.state) ? C.red : s.state === "waiting" ? C.yellow : s.mode === "plan" ? C.blue : C.green;
+  isStale(s) ? C.dim : needsYou(s) ? C.red : s.state === "waiting" ? C.yellow : s.mode === "plan" ? C.blue : C.green;
 
 const self = () => `${process.env.CARRIOT_BIN ?? "carriot"}`;
 
 const CHEATSHEET = (c: typeof C) => `${c.bold}CARRIOT CHEATSHEET${c.reset}  ${c.dim}one chariot, many horses: see who is pulling and who is waiting on you${c.reset}
+
+${c.bold}TICKETS AND PRS${c.reset}  each session shows its ticket and PR (#123 ✓/…/✗ CI, changes/approved); the watcher checks
+  every 2 min and turns a session red when CI fails, changes are requested or new comments land (your next prompt clears it)
 
 ${c.bold}NOTIFICATIONS${c.reset}  when a session starts needing you and you are not looking at it; click jumps there
   CARRIOT_NOTIFY=blocked skips "your turn", =off silences them
@@ -96,6 +99,8 @@ ${c.bold}COMMANDS${c.reset}
   carriot resume <name|id>      reopen an ended session (claude --resume, same directory and mode)
   carriot resume --lost         reopen everything lost in the last day (crash, reboot, killed window)
   carriot ls --ended            list ended sessions from the last week
+  carriot prs                   refresh and list each session's ticket and PR (CI, review, comments)
+  carriot watch                 PR watcher loop (tmux starts it; one copy at a time)
   carriot plan <name|id>        show the latest plan
   carriot pr <name|id>          show the latest PR preview
   carriot screen <name|id>      print the session's terminal
@@ -466,6 +471,25 @@ async function main() {
         skipPermissions: !v.safe,
       });
       return notify(r.message, !r.ok);
+    }
+    case "watch": {
+      const { watch } = await import("./watch");
+      return watch();
+    }
+    case "prs": {
+      const { refreshAll } = await import("./watch");
+      const { prBadge } = await import("./work");
+      const r = await refreshAll();
+      for (const s of core.sorted()) {
+        const w = db.getWork(s.id);
+        const pr = w?.pr ? JSON.parse(w.pr) : null;
+        if (!w?.ticket && !pr) continue;
+        const t = w?.ticket ? db.getTicket(w.ticket) : null;
+        console.log(
+          `${core.displayName(s).padEnd(28)} ${(w?.ticket ?? "").padEnd(12)} ${(pr ? prBadge(pr).text : "no PR").padEnd(22)} ${s.attention ? `${C.red}${s.attention}${C.reset}` : ""}${t?.title ? ` ${C.dim}${t.title}${C.reset}` : ""}`,
+        );
+      }
+      return console.log(`${C.dim}checked ${r.checked} sessions${r.flagged.length ? `; flagged ${r.flagged.map((f) => `${f.name} (${f.reason})`).join(", ")}` : ""}${C.reset}`);
     }
     case "prune":
       return core.reconcile();

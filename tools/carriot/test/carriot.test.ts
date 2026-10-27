@@ -11,6 +11,7 @@ const { fileDiff, flag, isPrCreate, prArtifact } = await import("../src/pr");
 const db = await import("../src/db");
 const core = await import("../src/core");
 const { fuzzyScore } = await import("../src/fuzzy");
+const work = await import("../src/work");
 const { shouldNotify, message } = await import("../src/notify");
 const { isStale, STALE_AFTER_MS } = await import("../src/types");
 
@@ -418,5 +419,92 @@ describe("notifications", () => {  const row = (state: string, detail: string | 
     expect(message(row("needs_approval", "Bash: rm -rf dist"))).toMatchObject({ subtitle: "Needs approval", body: "Bash: rm -rf dist", urgent: true });
     expect(message(row("pr_review", "PR: feat: thing"))).toMatchObject({ subtitle: "PR ready for review", body: "feat: thing" });
     expect(message(row("waiting", "Shall I commit?"))).toMatchObject({ subtitle: "Your turn", urgent: false });
+  });
+});
+
+describe("tickets and PRs", () => {
+  const pr = (over: Partial<import("../src/work").PrStatus> = {}) => ({
+    number: 7, url: "u", title: "t", state: "OPEN" as const, draft: false,
+    checks: { failed: 0, pending: 0, passed: 3, total: 3 }, review: "REVIEW_REQUIRED", activity: 1, ...over,
+  });
+
+  test("ticket ids come from the session folder, else the branch", () => {
+    expect(work.ticketFrom("/h/carriot/sessions/BEPLAT-6321/infra", "x")).toBe("BEPLAT-6321");
+    expect(work.ticketFrom("/h/carriot", "miguel-o/beplat-8049-retune-monitor")).toBe("BEPLAT-8049");
+    expect(work.ticketFrom("/h/carriot/sessions/review-infra#9668/infra", "HEAD")).toBeNull();
+    expect(work.reviewedPr("/h/carriot/sessions/review-infra#9668/infra")).toBe(9668);
+  });
+
+  test("repo comes from ssh or https remotes", () => {
+    expect(work.repoFromRemote("git@github.com:acme/infra.git")).toBe("acme/infra");
+    expect(work.repoFromRemote("https://github.com/acme/infra")).toBe("acme/infra");
+  });
+
+  test("check rollups count failures, pending and passes across both check kinds", () => {
+    expect(
+      work.summarizeChecks([
+        { __typename: "CheckRun", status: "COMPLETED", conclusion: "SUCCESS" },
+        { __typename: "CheckRun", status: "COMPLETED", conclusion: "SKIPPED" },
+        { __typename: "CheckRun", status: "IN_PROGRESS", conclusion: null },
+        { __typename: "StatusContext", state: "FAILURE" },
+      ]),
+    ).toEqual({ failed: 1, pending: 1, passed: 2, total: 4 });
+  });
+
+  test("mergeability gate checks are not CI", () => {
+    expect(work.summarizeChecks([{ __typename: "CheckRun", name: "PR is mergeable: main", status: "COMPLETED", conclusion: "FAILURE" }])).toEqual({
+      failed: 0, pending: 0, passed: 0, total: 0,
+    });
+  });
+
+  test("the work directory falls back to the last session folder in the conversation", () => {
+    const t = join(dir, "work-transcript.jsonl");
+    writeFileSync(t, [JSON.stringify({ cwd: "/h/carriot/sessions/BEPLAT-1/infra" }), JSON.stringify({ cwd: "/h/carriot" })].join("\n"));
+    expect(work.workDir("/h/carriot", t)).toBe("/h/carriot/sessions/BEPLAT-1/infra");
+    expect(work.workDir("/h/carriot/sessions/X/repo", t)).toBe("/h/carriot/sessions/X/repo");
+  });
+
+  test("activity ignores you and noisy automation", () => {
+    const s = work.summarizePr(
+      {
+        number: 1, url: "u", title: "t", state: "OPEN", isDraft: false, reviewDecision: "CHANGES_REQUESTED", statusCheckRollup: [],
+        comments: [{ author: { login: "github-actions" } }, { author: { login: "me" } }, { author: { login: "alice" } }],
+        reviews: [{ author: { login: "specterv2" } }, { author: { login: "renovate[bot]" } }],
+      },
+      "me",
+    );
+    expect(s.activity).toBe(2);
+    expect(s.review).toBe("CHANGES_REQUESTED");
+  });
+
+  test("the first look is a quiet baseline", () => {
+    expect(work.diffPr(null, pr({ checks: { failed: 2, pending: 0, passed: 0, total: 2 } }))).toEqual({ attention: null, notify: null });
+  });
+
+  test("CI failing, changes requested and new comments flag the session", () => {
+    expect(work.diffPr(pr(), pr({ checks: { failed: 1, pending: 0, passed: 2, total: 3 } })).attention).toBe("CI failing");
+    expect(work.diffPr(pr(), pr({ review: "CHANGES_REQUESTED" })).attention).toBe("changes requested");
+    expect(work.diffPr(pr(), pr({ activity: 3 })).attention).toBe("2 new comments");
+  });
+
+  test("approval and merge notify without flagging", () => {
+    expect(work.diffPr(pr(), pr({ review: "APPROVED" }))).toEqual({ attention: null, notify: { subtitle: "PR approved", urgent: false } });
+    expect(work.diffPr(pr(), pr({ state: "MERGED" }))).toEqual({ attention: null, notify: { subtitle: "PR merged", urgent: false } });
+  });
+
+  test("badges summarise CI and review", () => {
+    expect(work.prBadge(pr({ review: "CHANGES_REQUESTED" }))).toEqual({ text: "#7 ✓ changes", tone: "bad" });
+    expect(work.prBadge(pr({ checks: { failed: 0, pending: 2, passed: 1, total: 3 } })).tone).toBe("pending");
+  });
+
+  test("attention puts a session first and your next prompt clears it", () => {
+    db.apply({ agent: "claude", sessionId: "att-1", state: "waiting" });
+    db.open().query("UPDATE sessions SET updated_at = ?, state_since = ? WHERE id = 'att-1'").run(Date.now() - 3 * 86400_000, Date.now() - 3 * 86400_000);
+    db.setAttention("att-1", "CI failing");
+    expect(db.getSession("att-1")).toMatchObject({ attention: "CI failing" });
+    expect(isStale(db.getSession("att-1")!)).toBe(false);
+    expect(core.sorted()[0].id).toBe("att-1");
+    db.apply({ agent: "claude", sessionId: "att-1", state: "working", prompt: "fix the CI" });
+    expect(db.getSession("att-1")?.attention).toBeNull();
   });
 });

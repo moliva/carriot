@@ -75,6 +75,9 @@ export interface SessionRow {
   end_reason: string | null;
   project_dir: string | null;
   tmux_server: string | null;
+  /** Why the session needs you beyond its agent state (e.g. "CI failing" on its PR); cleared by your next prompt. */
+  attention: string | null;
+  attention_since: number | null;
 }
 
 export interface ArtifactRow {
@@ -100,7 +103,10 @@ const RANK: Record<State, number> = {
 
 export const urgency = (s: State) => RANK[s];
 
-export function label(row: Pick<SessionRow, "state" | "mode">): string {
+export const needsYou = (row: Pick<SessionRow, "state" | "attention">) => BLOCKED.includes(row.state) || !!row.attention;
+
+export function label(row: Pick<SessionRow, "state" | "mode"> & Partial<Pick<SessionRow, "attention">>): string {
+  if (row.attention && row.state !== "ended") return row.attention;
   switch (row.state) {
     case "needs_approval":
       return "needs approval";

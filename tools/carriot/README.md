@@ -16,6 +16,14 @@ Agent hooks call `bin/carriot hook <agent>`. An adapter (`src/adapters/<agent>.t
 
 Agents without an adapter can push states directly: `carriot emit --agent pi --session <id> --state waiting --detail "…"`.
 
+## Tickets and PRs
+
+Each session shows what it is working on: the ticket (from its `sessions/<TICKET>/` folder or a Linear-style branch), the branch, and the PR with its CI and review state. Reins puts a badge on each row (`#9936 ✓ approved`, `#9668 ✗`, `#9939 … changes`) and a ticket and PR line in the detail pane; the dashboard shows the same, and `/` finds sessions by ticket or PR number. Review sessions (`sessions/review-<repo>#<n>/`) show the PR under review. When an agent has wandered back to the hub root, the last session folder in its conversation is used.
+
+A watcher (`carriot watch`, started by `carriot.tmux`; one copy at a time) checks every 2 minutes with `gh`. When CI starts failing, changes are requested or new comments or reviews arrive from someone other than you, the session turns red, moves into "Needs you" and notifies you; your next prompt in that session clears it, and a CI flag also clears once checks pass. Approvals and merges notify without flagging. The first look at a PR only records a baseline. Merge-gate checks (names containing "mergeable") are not counted as CI, and comments from noisy automation are ignored.
+
+Ticket titles and statuses come from Linear when a key is available: `CARRIOT_LINEAR_API_KEY` / `LINEAR_API_KEY`, or a keychain item: `security add-generic-password -s carriot-linear -a "$USER" -w <key>`. Without one, only the ticket id is shown. `carriot prs` refreshes once and prints the list.
+
 ## Notifications
 
 A macOS notification fires when a session **starts** needing you: needs approval, has a question, plan or PR ready for review (with a sound), or your turn (silent). It says the session name, what's needed and the detail (the command, the question, the plan or PR title, the agent's last line). Clicking it jumps to the session, unparking or attaching it first. It is skipped when you are already looking at that session (its pane on screen and the terminal app in front), new and resumed sessions stay quiet so a reboot resume does not fire one per agent, and a notification withdraws itself once its session no longer needs you. `CARRIOT_NOTIFY=blocked` skips "your turn", `off` silences them. Uses `terminal-notifier` (falls back to a plain notification without click-to-jump).
@@ -84,6 +92,9 @@ Optional: `brew install glow git-delta` for nicer plan and diff rendering in the
 |---|---|---|
 | `CARRIOT_DB` | `~/.local/state/carriot/carriot.db` | database path |
 | `CARRIOT_PORT` | `7777` | dashboard port |
+| `CARRIOT_PR_POLL_SECONDS` | `120` | how often the watcher checks PRs |
+| `CARRIOT_PR_IGNORE_CHECKS` | `mergeable` | comma-separated check-name fragments that are not CI |
+| `CARRIOT_PR_IGNORE_AUTHORS` | `github-actions,linear-code,…` | comment authors that do not count as review activity |
 | `CARRIOT_NOTIFY` | `all` | `blocked` skips "your turn" notifications, `off` silences them |
 | `CARRIOT_STALE_AFTER_HOURS` | `24` | no activity for this long moves a session to the idle group |
 | `CARRIOT_PR_GATE` | on | set to `0` to record PR previews without forcing a confirmation |
