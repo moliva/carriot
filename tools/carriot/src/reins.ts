@@ -1,6 +1,7 @@
 import * as core from "./core";
 import * as db from "./db";
 import { fuzzyScore } from "./fuzzy";
+import { ansiFg, COLOUR } from "./palette";
 import * as tmux from "./tmux";
 import { BLOCKED, isStale, label, STALE_AFTER_MS, type SessionRow } from "./types";
 
@@ -10,11 +11,11 @@ const A = {
   bold: `${ESC}1m`,
   dim: `${ESC}2m`,
   inverse: `${ESC}7m`,
-  red: `${ESC}38;5;203m`,
-  amber: `${ESC}38;5;214m`,
-  green: `${ESC}38;5;78m`,
-  blue: `${ESC}38;5;75m`,
-  grey: `${ESC}38;5;244m`,
+  red: ansiFg(COLOUR.blocked),
+  amber: ansiFg(COLOUR.waiting),
+  green: ansiFg(COLOUR.working),
+  blue: ansiFg(COLOUR.planning),
+  grey: ansiFg(COLOUR.idle),
   selBg: `${ESC}48;5;236m`,
 };
 
