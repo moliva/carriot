@@ -43,7 +43,7 @@ enter / jump reconnects anything: parked sessions come back, background ones ope
 
 ${c.bold}TMUX${c.reset}  ${c.dim}(prefix = C-a)${c.reset}
   prefix A          new agent window (claude --dangerously-skip-permissions)
-  prefix T          reins in its own tmux session (carriot-reins); press again to go back
+  prefix T          reins in its own tmux session (carriot-reins), on the session you came from; again: go back
   prefix F          picker popup
   prefix b          jump to the session that has waited on you the longest
   prefix P          park the current agent (it keeps running out of sight)
@@ -403,7 +403,13 @@ async function main() {
     case "pick":
       return pick();
     case "reins": {
-      if (rest.includes("--toggle")) return tmux.toggleReins(`${self()} reins`);
+      if (rest.includes("--toggle")) {
+        // Coming from an agent's pane: ask reins (running or about to start) to select that session.
+        const pane = process.env.TMUX_PANE;
+        const from = pane ? db.liveSessions().find((s) => s.pane === pane) : undefined;
+        if (from) db.putSetting("reins_focus", JSON.stringify({ id: from.id, at: Date.now() }));
+        return tmux.toggleReins(`${self()} reins`);
+      }
       const { reins } = await import("./reins");
       return reins();
     }

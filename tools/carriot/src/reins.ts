@@ -228,6 +228,24 @@ function available(s: SessionRow, t: Tab): boolean {
   return true;
 }
 
+/** Last focus request handled; requests come from the toggle, through the database. */
+let focusHandledAt = 0;
+const FOCUS_FRESH_MS = 10_000;
+
+/** Selects the session the toggle was pressed from, if a fresh request is waiting. */
+function takeFocusRequest() {
+  const raw = db.getSetting("reins_focus");
+  if (!raw) return;
+  try {
+    const { id, at } = JSON.parse(raw) as { id: string; at: number };
+    if (at <= focusHandledAt || Date.now() - at > FOCUS_FRESH_MS) return;
+    focusHandledAt = at;
+    if (!allRows().some((s) => s.id === id)) return;
+    filter = null;
+    select(id);
+  } catch {}
+}
+
 function refresh(force = false) {
   const now = Date.now();
   if (now - lastReconcile > 10_000) {
@@ -242,6 +260,7 @@ function refresh(force = false) {
   sessions = core.sorted(order).filter((s) => s.pane !== process.env.TMUX_PANE);
   endedRows = showWeekOfEnded ? db.endedSessions(7 * DAY) : core.lostSessions().reverse();
   if (!selected()) selectedId = sessions[0]?.id ?? null;
+  takeFocusRequest();
   if (filter?.trim() && !visibleSessions().some((x) => x.id === selectedId)) selectBestMatch();
   const s = selected();
   if (s && !tabPinned && (s.id !== before?.id || s.state !== before?.state)) {
