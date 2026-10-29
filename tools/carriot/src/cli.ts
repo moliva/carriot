@@ -72,7 +72,8 @@ ${c.bold}REINS${c.reset}  ${c.dim}carriot reins${c.reset}
   a                 new agent window (type an optional first prompt, enter starts it)
   x                 close the selected session and its pane (y to confirm)
   o                 open in the web dashboard    q     quit
-  ?                 ask the copilot beside reins about the selected session (CARRIOT_COPILOT_MODEL, default haiku)
+  ?                 ask the copilot beside reins about the selected session (CARRIOT_COPILOT_MODEL)
+  c                 close the copilot (or prefix X / /exit inside it)
 
 ${c.bold}PICKER POPUP${c.reset}  ${c.dim}carriot pick${c.reset}
   type to filter    enter jump    ctrl-p plan    ctrl-r PR preview
@@ -358,6 +359,7 @@ async function main() {
       core.reconcile();
       const pane = process.env.TMUX_PANE;
       const s = rest[0] ? need(rest[0]) : core.sorted().find((x) => x.pane === pane);
+      if (!s && pane && tmux.isCopilot(pane)) return tmux.killPane(pane);
       if (!s) return notify("no agent session in this pane", true);
       const r = core.close(s);
       return notify(r.message, !r.ok);

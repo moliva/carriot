@@ -7,7 +7,7 @@ import * as tmux from "./tmux";
 import type { SessionRow } from "./types";
 
 /**
- * A cheap Claude beside reins for quick questions about the other sessions. It starts outside the hub so the hub's
+ * A cheap model beside reins for quick questions about the other sessions. It starts outside the hub so the hub's
  * CLAUDE.md, the carriot hooks (project settings) and MCP servers never load: it is not tracked as a session, and it can only
  * read.
  */
@@ -41,7 +41,7 @@ function command(): { cwd: string; command: string } {
   writeFileSync(join(cwd, "settings.json"), JSON.stringify(settings(bin), null, 2));
   const args = [
     "claude",
-    "--model", process.env.CARRIOT_COPILOT_MODEL ?? "haiku",
+    "--model", process.env.CARRIOT_COPILOT_MODEL ?? "deepseek/deepseek-v4.1-flash",
     "--setting-sources", "user",
     "--settings", join(cwd, "settings.json"),
     "--permission-mode", "dontAsk",
@@ -67,4 +67,11 @@ export function ask(pane: string, s: SessionRow | null): string {
   return started
     ? "Copilot starting (first time: accept the folder trust prompt); ? again pre-fills the selected session."
     : "Could not start the copilot.";
+}
+
+/** Closes the copilot beside `pane` (reins); the conversation is not kept. */
+export function close(pane: string): string {
+  const existing = tmux.copilotPane(pane);
+  if (!existing) return "The copilot is not open.";
+  return tmux.killPane(existing) ? "Copilot closed." : "Could not close the copilot.";
 }

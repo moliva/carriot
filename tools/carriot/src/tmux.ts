@@ -286,6 +286,12 @@ export function splitCopilot(pane: string, opts: { cwd: string; command: string;
   return id;
 }
 
+export const isCopilot = (pane: string) => tmux("display-message", "-p", "-t", pane, "#{@carriot_copilot}") === "1";
+
+export function killPane(pane: string): boolean {
+  return tmux("kill-pane", "-t", pane) !== null;
+}
+
 /** Focuses a pane and, if given, types `text` into it without submitting. */
 export function focusPane(pane: string, text?: string): boolean {
   if (tmux("select-pane", "-t", pane) === null) return false;

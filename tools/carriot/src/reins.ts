@@ -1,4 +1,4 @@
-import { ask } from "./copilot";
+import { ask, close as closeCopilot } from "./copilot";
 import * as core from "./core";
 import * as db from "./db";
 import { fuzzyScore } from "./fuzzy";
@@ -444,7 +444,7 @@ function footer(width: number): string {
   if (flash && flash.until > Date.now()) return fit(` ${A.bold}${flash.text}${A.reset}`, width);
   const keys = [
     ["j/k ^n/^p", "move"], ["/", "find"], ["s", "sort"], ["enter", "open"], ["n", "next waiting"], ["1-4", "tabs"], ["J/K ^d/^u", "scroll"],
-    ["r", "reply"], ["p", "park"], ["a", "new"], ["x", "close"], ["?", "ask"], ["R", "resume lost"], ["o", "web"], ["q", "quit"],
+    ["r", "reply"], ["p", "park"], ["a", "new"], ["x", "close"], ["?", "ask"], ["c", "close ask"], ["R", "resume lost"], ["o", "web"], ["q", "quit"],
   ];
   return fit(` ${keys.map(([k, v]) => `${A.bold}${k}${A.reset} ${A.grey}${v}${A.reset}`).join("  ")}`, width);
 }
@@ -655,6 +655,10 @@ function onKey(key: string) {
       if (!pane) return say("The copilot needs reins to run in tmux.");
       const message = ask(pane, selected());
       return message ? say(message) : undefined;
+    }
+    case "c": {
+      const pane = process.env.TMUX_PANE;
+      return pane ? say(closeCopilot(pane)) : undefined;
     }
     case "o": {
       const s = selected();

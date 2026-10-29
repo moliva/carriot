@@ -10,7 +10,7 @@ Agent hooks call `bin/carriot hook <agent>`. An adapter (`src/adapters/<agent>.t
 
 - **tmux**: each window gets a `@carriot_badge` option holding the worst state among its agents.
 - **`carriot reins`**: full-screen view of every session, in its own tmux session (`carriot-reins`, apart from the sessions agents live in; `prefix T` / cmd+shift+a toggles in, with the session you pressed it from already selected, and back out; it keeps running in between): live session list, plan / PR preview / terminal tabs, jump and reply.
-  - **Copilot**: `?` opens a cheap Claude (`CARRIOT_COPILOT_MODEL`, default `haiku`) in a pane beside reins, for quick questions about any session; once it runs, `?` pre-fills the question with the selected session. It starts in `copilot/` next to the database, outside the hub, so the carriot hooks never track it, and it can only read: `carriot ls/screen/plan/pr`, read-only `sqlite3` on the database, `git log/diff/status/show` in the worktrees, and the sessions' transcripts in `~/.claude/projects`. Your MCP servers are left out (`--strict-mcp-config`). The first start asks you to trust that folder once.
+  - **Copilot**: `?` opens a cheap model (`CARRIOT_COPILOT_MODEL`, default `deepseek/deepseek-v4.1-flash`) in a pane beside reins, for quick questions about any session; once it runs, `?` pre-fills the question with the selected session. It starts in `copilot/` next to the database, outside the hub, so the carriot hooks never track it, and it can only read: `carriot ls/screen/plan/pr`, read-only `sqlite3` on the database, `git log/diff/status/show` in the worktrees, and the sessions' transcripts in `~/.claude/projects`. Your MCP servers are left out (`--strict-mcp-config`). The first start asks you to trust that folder once. `c` in reins closes it, as do `prefix X` and `/exit` inside it.
 - **`carriot pick`**: fzf popup with preview; jump, plan, PR preview, pane capture.
 - **`carriot next`**: jump to the session that has waited on you the longest.
 - **`carriot serve`**: local web dashboard with live updates, rendered plans, GitHub-style PR preview, and replies. The PR preview has a file tree, syntax highlighting, expandable context, and line comments sent back to the agent as one review ("Request changes" declines a pending `gh pr create`).
@@ -107,7 +107,7 @@ Optional: `brew install glow git-delta` for nicer plan and diff rendering in the
 | `CARRIOT_PR_GATE` | on | set to `0` to record PR previews without forcing a confirmation |
 | `CARRIOT_DEBUG` | off | log raw hook payloads to the `events` table (last 1000) |
 | `CARRIOT_TERMINAL_APP` | `WezTerm` | app brought to front when jumping from the dashboard |
-| `CARRIOT_COPILOT_MODEL` | `haiku` | model for the reins copilot; any id your Claude Code accepts, e.g. `deepseek/deepseek-v4.1-flash` through an OpenRouter base URL |
+| `CARRIOT_COPILOT_MODEL` | `deepseek/deepseek-v4.1-flash` | model for the reins copilot; the default needs an OpenRouter `ANTHROPIC_BASE_URL`, otherwise use e.g. `haiku` |
 | `CARRIOT_COPILOT_WIDTH` | `40%` | width of the copilot pane |
 
 Hook failures are appended to `errors.log` next to the database and never affect the agent.
