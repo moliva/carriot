@@ -16,6 +16,23 @@ Questions often start with `About <name> (<id>):`, naming the session selected i
   - `sessions`: one row per agent session (`id`, `name`, `cwd`, `tmux_target`, `state`, `detail`, `last_prompt`, `last_message`; times are epoch milliseconds).
   - `work`: `session_id`, `repo`, `branch`, `ticket`, `pr` (the PR URL), as the watcher last recorded them.
   - `artifacts`: captured plans and PR previews per session.
+  - `tickets`: Linear tickets the sessions work on (`id` such as `BEPLAT-7983`, `title`, `status`, `url`). Join on `work.ticket`.
+- Transcripts: every session's full conversation is at `<transcripts>/<encoded start dir>/<session id>.jsonl` (path below); find it with `ls <transcripts>/*/<session id>.jsonl`. Use them for history the other sources lack: why it chose something, what it tried, what you told it earlier. They run to megabytes, so never Read one whole: `grep` it for a keyword, or print the last turns as text:
+  ```sh
+  tail -n 400 <file> | jq -r 'select(.type=="user" or .type=="assistant") | .type as $who | .message.content | (if type=="string" then . else (map(select(.type=="text") | .text) | join("\n")) end) | select(length>0) | "[\($who)] \(.)"'
+  ```
+  Raise the `tail` count to go further back.
 - Session worktrees live under `sessions/<ticket or review-repo#n>/<repo>` in the hub. Read files there, or `cd` into one and use `git log`, `git diff`, `git status` and `git show` to see what a session changed.
 
+## Running commands
+
+Only the commands above are allowed, matched by how a command starts, so keep each call simple: one command per call (a pipe into `jq`, `grep`, `tail` or `wc` is fine), literal full paths, no shell variables, no `cd` outside the hub or transcripts, no `;` or `&&` chains. Make several calls in parallel instead. If a call is denied, split it into simpler calls and try again before giving up.
+
 States: `working`, `planning`, `waiting` (its turn is over, your turn), `blocked` or a permission/question state (it needs you), `ended`.
+
+## Answers
+
+- Short: a few lines or bullets, the key fact first. No preamble.
+- Write every PR as a clickable link, e.g. `[backend#41686](https://github.com/org/backend/pull/41686)`, using the URL from `work.pr`.
+- Refer to people as they/them unless their pronouns are stated.
+- Say where an answer came from (screen, transcript, database) when it matters, and how fresh it is.
