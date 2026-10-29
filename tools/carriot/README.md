@@ -10,7 +10,14 @@ Agent hooks call `bin/carriot hook <agent>`. An adapter (`src/adapters/<agent>.t
 
 - **tmux**: each window gets a `@carriot_badge` option holding the worst state among its agents.
 - **`carriot reins`**: full-screen view of every session, in its own tmux session (`carriot-reins`, apart from the sessions agents live in; `prefix T` / cmd+shift+a toggles in, with the session you pressed it from already selected, and back out; it keeps running in between): live session list, plan / PR preview / terminal tabs, jump and reply.
-  - **Copilot**: `?` opens a cheap model (`CARRIOT_COPILOT_MODEL`, default `deepseek/deepseek-v4.1-flash`) in a pane beside reins, for quick questions about any session; once it runs, `?` pre-fills the question with the selected session. It starts in `copilot/` next to the database, outside the hub, so the carriot hooks never track it, and it can only read: `carriot ls/screen/plan/pr`, read-only `sqlite3` on the database, `git log/diff/status/show` in the worktrees, and the sessions' transcripts in `~/.claude/projects`. Your MCP servers are left out (`--strict-mcp-config`). The first start asks you to trust that folder once. `c` in reins closes it, as do `prefix X` and `/exit` inside it.
+  - **Scout**: a cheap model (`CARRIOT_SCOUT_MODEL`, default `deepseek/deepseek-v4.1-flash`) that reads the other sessions for you, read-only.
+    - Every session that waits on you gets a one-line *needs from you* ("Approve splitting the ticket…") in its row and overview, written when it enters that state.
+    - Coming back to reins after 15 minutes or more (`CARRIOT_BRIEF_AFTER_MINUTES`) opens a briefing on what changed meanwhile in the report panel; `b` shows or hides the panel (with nothing in it yet, it briefs on the last 4 hours), esc closes it.
+    - `?` asks about the selected session; the answer lands in tab 5, *scout*. Tab in the question box switches to all sessions, live and ended: the answer opens in the report panel and the first session it names is selected, so enter jumps to it or resumes it.
+    - `w` writes up the last 24 hours for your team (TL;DR, then done / in progress / blocked, no ticket IDs) and copies it to the clipboard; `carriot writeup [--hours N]` prints it.
+    - `S` opens the scout as a pane beside reins for follow-up questions, pre-filling the selected session; `c` closes it, as do `prefix X` and `/exit` inside it. The first start asks you to trust its folder once.
+
+    It runs in `scout/` next to the database, outside the hub, so the carriot hooks never track it and your MCP servers stay out (`--strict-mcp-config`). Its tools are limited to `carriot ls/screen/plan/pr`, read-only `sqlite3` on the database, `git log/diff/status/show` in the worktrees, and the sessions' transcripts in `~/.claude/projects`; summaries (needs, briefings, write-ups) get no tools at all, only the data reins hands them. One-off runs are not saved as transcripts.
 - **`carriot pick`**: fzf popup with preview; jump, plan, PR preview, pane capture.
 - **`carriot next`**: jump to the session that has waited on you the longest.
 - **`carriot serve`**: local web dashboard with live updates, rendered plans, GitHub-style PR preview, and replies. The PR preview has a file tree, syntax highlighting, expandable context, and line comments sent back to the agent as one review ("Request changes" declines a pending `gh pr create`).
@@ -107,8 +114,9 @@ Optional: `brew install glow git-delta` for nicer plan and diff rendering in the
 | `CARRIOT_PR_GATE` | on | set to `0` to record PR previews without forcing a confirmation |
 | `CARRIOT_DEBUG` | off | log raw hook payloads to the `events` table (last 1000) |
 | `CARRIOT_TERMINAL_APP` | `WezTerm` | app brought to front when jumping from the dashboard |
-| `CARRIOT_COPILOT_MODEL` | `deepseek/deepseek-v4.1-flash` | model for the reins copilot; the default needs an OpenRouter `ANTHROPIC_BASE_URL`, otherwise use e.g. `haiku` |
-| `CARRIOT_COPILOT_WIDTH` | `40%` | width of the copilot pane |
+| `CARRIOT_SCOUT_MODEL` | `deepseek/deepseek-v4.1-flash` | model for the scout; the default needs an OpenRouter `ANTHROPIC_BASE_URL`, otherwise use e.g. `haiku` |
+| `CARRIOT_SCOUT_WIDTH` | `40%` | width of the scout pane |
+| `CARRIOT_BRIEF_AFTER_MINUTES` | `15` | time away from reins after which coming back opens a briefing |
 
 Hook failures are appended to `errors.log` next to the database and never affect the agent.
 

@@ -62,6 +62,14 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT
 );
+CREATE TABLE IF NOT EXISTS notes (
+  session_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  key TEXT,
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (session_id, kind)
+);
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   agent TEXT,
@@ -241,6 +249,7 @@ export function purgeEnded(olderThanMs: number) {
   const cutoff = Date.now() - olderThanMs;
   const d = open();
   d.query("DELETE FROM artifacts WHERE session_id IN (SELECT id FROM sessions WHERE state = 'ended' AND ended_at < ?)").run(cutoff);
+  d.query("DELETE FROM notes WHERE session_id IN (SELECT id FROM sessions WHERE state = 'ended' AND ended_at < ?)").run(cutoff);
   d.query("DELETE FROM sessions WHERE state = 'ended' AND ended_at < ?").run(cutoff);
 }
 
@@ -333,4 +342,26 @@ export function getSetting(key: string): string | null {
 
 export function putSetting(key: string, value: string) {
   open().query("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
+}
+
+/** Latest scout output of one kind for a session ("*" for ones about every session); `key` says what it was made for. */
+export interface NoteRow {
+  session_id: string;
+  kind: string;
+  key: string | null;
+  body: string;
+  created_at: number;
+}
+
+export function getNote(sessionId: string, kind: string): NoteRow | null {
+  return open().query<NoteRow, [string, string]>("SELECT * FROM notes WHERE session_id = ? AND kind = ?").get(sessionId, kind);
+}
+
+export function putNote(sessionId: string, kind: string, key: string | null, body: string) {
+  open()
+    .query(
+      `INSERT INTO notes (session_id, kind, key, body, created_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(session_id, kind) DO UPDATE SET key = excluded.key, body = excluded.body, created_at = excluded.created_at`,
+    )
+    .run(sessionId, kind, key, body, Date.now());
 }

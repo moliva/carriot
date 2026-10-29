@@ -1,9 +1,9 @@
-import { ask, close as closeCopilot } from "./copilot";
 import * as core from "./core";
 import * as db from "./db";
 import { fuzzyScore } from "./fuzzy";
 import { prBadge, prLine, type PrStatus } from "./work";
 import { ansiFg, COLOUR, DELTA_THEME, GLOW_STYLE } from "./palette";
+import * as scout from "./scout";
 import * as tmux from "./tmux";
 import { BLOCKED, isStale, needsYou, label, STALE_AFTER_MS, type SessionRow } from "./types";
 
@@ -22,10 +22,10 @@ const A = {
   noUnderline: `${ESC}24m`,
 };
 
-type Tab = "overview" | "plan" | "pr" | "screen";
+type Tab = "overview" | "plan" | "pr" | "screen" | "scout";
 const WHERE: Record<string, string> = { parked: "⏸ parked", background: "◌ bg", attached: "◉ bg" };
-const TABS: Tab[] = ["overview", "plan", "pr", "screen"];
-const TAB_NAME: Record<Tab, string> = { overview: "overview", plan: "plan", pr: "PR preview", screen: "terminal" };
+const TABS: Tab[] = ["overview", "plan", "pr", "screen", "scout"];
+const TAB_NAME: Record<Tab, string> = { overview: "overview", plan: "plan", pr: "PR preview", screen: "terminal", scout: "scout" };
 
 const kind = (s: SessionRow) =>
   needsYou(s) ? "blocked" : s.state === "waiting" ? "waiting" : s.mode === "plan" ? "planning" : "working";
@@ -163,6 +163,14 @@ let replying: string | null = null;
 let composing: string | null = null;
 let confirmClose: string | null = null;
 let confirmResumeLost = false;
+/** Question being typed for the scout: about the selected session, or about all of them. */
+let asking: { text: string; all: boolean } | null = null;
+/** The report panel (briefing, write-up, cross-session answer) covers the detail pane while open. */
+let reportOpen = false;
+/** Scout runs in flight: "need:<id>", "answer:<id>", and "report" for the one report at a time. */
+const pending = new Set<string>();
+/** Needs-you lines that came back empty, by session and state; not retried until the state changes. */
+const needFailed = new Set<string>();
 /** Resumable ended sessions: by default only ones lost in the last day; `e` shows everything ended in the last week. */
 let endedRows: SessionRow[] = [];
 let showWeekOfEnded = false;
@@ -226,7 +234,97 @@ function available(s: SessionRow, t: Tab): boolean {
   if (t === "plan") return !!db.latestArtifact(s.id, "plan");
   if (t === "pr") return !!db.latestArtifact(s.id, "pr");
   if (t === "screen") return !ended(s) && (!!s.pane || !!s.bg);
+  if (t === "scout") return true;
   return true;
+}
+
+// --- scout ---------------------------------------------------------------------
+
+/** Runs a scout job under `key`, then redraws; `done` gets its result. */
+function track<T>(key: string, job: Promise<T>, done?: (value: T) => void) {
+  pending.add(key);
+  job
+    .then((v) => done?.(v))
+    .catch(() => {})
+    .finally(() => {
+      pending.delete(key);
+      refresh(true);
+      draw();
+    });
+}
+
+/** The scout's line on what a waiting or blocked session needs from you, while it is still in that state. */
+function needLine(s: SessionRow): string | null {
+  const n = db.getNote(s.id, "need");
+  return n && n.key === scout.needKey(s) ? n.body : null;
+}
+
+/** Asks the scout, two at a time, for a needs-you line on each active session that waits on you and has none yet. */
+function scoutNeeds() {
+  for (const s of sessions) {
+    if ([...pending].filter((k) => k.startsWith("need:")).length >= 2) return;
+    if (isStale(s) || kind(s) === "working" || kind(s) === "planning") continue;
+    const key = `${s.id}:${scout.needKey(s)}`;
+    if (pending.has(`need:${s.id}`) || needFailed.has(key) || needLine(s)) continue;
+    track(`need:${s.id}`, scout.need(s), (line) => {
+      if (!line) needFailed.add(key);
+    });
+  }
+}
+
+function startReport(job: Promise<scout.Report | null>, done?: (r: scout.Report) => void) {
+  if (pending.has("report")) return say("The scout is still on the last report.");
+  reportOpen = true;
+  scroll = 0;
+  track("report", job, (r) => (r ? done?.(r) : say("The scout came back empty.")));
+}
+
+/** Selects the first session a cross-session answer names, showing a week of ended ones if it ended. */
+function selectFound(r: scout.Report) {
+  const id = r.ids?.[0];
+  if (!id) return;
+  if (!allRows().some((s) => s.id === id) && db.getSession(id)?.state === "ended" && !showWeekOfEnded) {
+    showWeekOfEnded = true;
+    refresh(true);
+  }
+  if (!allRows().some((s) => s.id === id)) return;
+  filter = null;
+  select(id);
+  const s = selected();
+  say(`Selected ${s ? core.displayName(s) : id}; enter ${s && ended(s) ? "resumes" : "jumps to"} it.`);
+}
+
+function ask(text: string, all: boolean) {
+  const s = all ? null : selected();
+  if (!all && !s) return;
+  if (all)
+    return startReport(
+      scout.answer(text, null).then((a) => (a ? scout.lastReport() : null)),
+      selectFound,
+    );
+  tab = "scout";
+  tabPinned = true;
+  scroll = 0;
+  track(`answer:${s!.id}`, scout.answer(text, s), (a) => {
+    if (!a) say("The scout came back empty.");
+  });
+}
+
+function copy(text: string): boolean {
+  if (!Bun.which("pbcopy")) return false;
+  return Bun.spawnSync(["pbcopy"], { stdin: new TextEncoder().encode(text) }).exitCode === 0;
+}
+
+const AWAY_MS = Number(process.env.CARRIOT_BRIEF_AFTER_MINUTES ?? 15) * 60_000;
+let returnHandledAt = Date.now() - 10_000;
+
+/** Coming back to reins after a while away: brief on what changed meanwhile. */
+function takeReturn() {
+  const entered = Number(db.getSetting("reins_entered") ?? 0);
+  if (entered <= returnHandledAt) return;
+  returnHandledAt = entered;
+  const left = Number(db.getSetting("reins_left") ?? 0);
+  if (left && entered - left >= AWAY_MS && !pending.has("report")) startReport(scout.brief(left));
 }
 
 /** Last focus request handled; requests come from the toggle, through the database. */
@@ -262,6 +360,8 @@ function refresh(force = false) {
   endedRows = showWeekOfEnded ? db.endedSessions(7 * DAY) : core.lostSessions().reverse();
   if (!selected()) selectedId = sessions[0]?.id ?? null;
   takeFocusRequest();
+  takeReturn();
+  scoutNeeds();
   if (filter?.trim() && !visibleSessions().some((x) => x.id === selectedId)) selectBestMatch();
   const s = selected();
   if (s && !tabPinned && (s.id !== before?.id || s.state !== before?.state)) {
@@ -323,7 +423,8 @@ function listLines(width: number, height: number): string[] {
       lines.push(
         `${bg}${marker}${A.reset}${bg}${dot}${gone ? "✕" : "●"}${A.reset}${bg} ${idle ? A.grey : A.bold}${fit(`${sel ? A.inverse : ""}${name}${A.reset}${bg}${A.grey}${tag}`, nameMax, bg)}${A.reset}${bg} ${ageTint(ts)}${age}${A.reset}${bg} ${A.reset}`,
       );
-      const detail = s.detail ? ` · ${s.detail.replace(/\s+/g, " ")}` : "";
+      const need = gone ? null : needLine(s);
+      const detail = need ? ` · ${A.reset}${bg}${need}` : s.detail ? ` · ${s.detail.replace(/\s+/g, " ")}` : "";
       const status = gone ? endedLabel(s) : label(s);
       const pr = workOf(s).pr;
       const badge = pr && !gone ? prBadge(pr) : null;
@@ -342,10 +443,27 @@ function listLines(width: number, height: number): string[] {
 function content(s: SessionRow, width: number): string[] {
   if (tab === "overview") {
     const lines: string[] = [];
+    const need = needLine(s);
+    if (need) lines.push(`${A.grey}NEEDS FROM YOU${A.reset}`, ...wrap(need, width).map((l) => `${A.bold}${l}${A.reset}`), "");
     if (s.last_prompt) lines.push(`${A.grey}LAST PROMPT${A.reset}`, ...wrap(`› ${s.last_prompt}`, width).map((l) => `${A.bold}${l}${A.reset}`), "");
     if (s.state !== "waiting" && s.detail) lines.push(`${A.grey}NOW${A.reset}`, ...wrap(s.detail, width), "");
     if (s.last_message) lines.push(`${A.grey}LAST REPLY${A.reset}`, ...markdown(`msg:${s.id}:${s.updated_at}`, s.last_message, width));
     return lines.length ? lines : [`${A.grey}Nothing captured yet.${A.reset}`];
+  }
+  if (tab === "scout") {
+    const lines: string[] = [];
+    const need = needLine(s);
+    if (need) lines.push(`${A.grey}NEEDS FROM YOU${A.reset}`, ...wrap(need, width).map((l) => `${A.bold}${l}${A.reset}`), "");
+    if (pending.has(`answer:${s.id}`)) lines.push(`${A.amber}scouting…${A.reset}`, "");
+    const a = scout.lastAnswer(s.id);
+    if (a)
+      lines.push(
+        `${A.grey}ASKED ${core.ago(a.at).toUpperCase()} AGO${A.reset}`,
+        ...wrap(`› ${a.q}`, width).map((l) => `${A.bold}${l}${A.reset}`),
+        "",
+        ...markdown(`answer:${s.id}:${a.at}`, a.a, width),
+      );
+    return lines.length ? lines : [`${A.grey}? asks the scout about this session; tab in the question box asks about all sessions.${A.reset}`];
   }
   if (tab === "plan") {
     const a = db.latestArtifact(s.id, "plan");
@@ -382,7 +500,24 @@ function content(s: SessionRow, width: number): string[] {
   return (text ?? "no terminal output available").replace(/\n+$/, "").split("\n");
 }
 
+function reportLines(width: number): { head: string[]; body: string[] } {
+  const r = scout.lastReport();
+  const busy = pending.has("report");
+  const head = [
+    `${A.bold}${busy ? "Scouting…" : (r?.title ?? "Scout report")}${A.reset}`,
+    `${A.grey}${[!busy && r ? `${core.ago(r.at)} ago` : null, "b or esc closes", "w write-up", "? ask"].filter(Boolean).join(" · ")}${A.reset}`,
+    `${A.grey}${"─".repeat(width)}${A.reset}`,
+  ];
+  if (busy) return { head, body: [`${A.amber}The scout is reading your sessions…${A.reset}`] };
+  if (!r) return { head, body: [`${A.grey}No report yet. w writes one up; tab in the ? box asks about all sessions.${A.reset}`] };
+  return { head, body: markdown(`report:${r.at}`, r.text, width) };
+}
+
 function detailLines(width: number, height: number): string[] {
+  if (reportOpen) {
+    const { head, body } = reportLines(width);
+    return scrolled(head, body, width, height, false);
+  }
   const s = selected();
   if (!s) return [];
   const head = [
@@ -398,10 +533,14 @@ function detailLines(width: number, height: number): string[] {
     }).join(" "),
     `${A.grey}${"─".repeat(width)}${A.reset}`,
   ];
-  const body = content(s, width);
+  return scrolled(head, content(s, width), width, height, tab === "screen");
+}
+
+/** Fits a header and a scrollable body into `height` rows; `tail` keeps a live view pinned to its end. */
+function scrolled(head: string[], body: string[], width: number, height: number, tail: boolean): string[] {
   contentHeight = Math.max(1, height - head.length);
   const maxScroll = Math.max(0, body.length - contentHeight);
-  if (tab === "screen" && follow) scroll = maxScroll;
+  if (tail && follow) scroll = maxScroll;
   scroll = Math.max(0, Math.min(scroll, maxScroll));
   const shown = body.slice(scroll, scroll + contentHeight);
   if (maxScroll > 0) {
@@ -437,14 +576,19 @@ function footer(width: number): string {
     return fit(`${A.inverse}${A.red} close ${A.reset} ${A.bold}${core.displayName(closing)}${A.reset} ${A.grey}and its pane? the conversation stays resumable${A.reset}  ${A.bold}y${A.reset} ${A.grey}close · any other key cancels${A.reset}`, width);
   if (composing !== null)
     return fit(`${A.inverse} new agent ${A.reset} ${A.grey}first prompt (optional):${A.reset} ${composing}${A.inverse} ${A.reset}  ${A.grey}enter start · esc cancel${A.reset}`, width);
+  if (asking !== null) {
+    const s = selected();
+    const about = asking.all ? "about all sessions" : `about ${s ? core.displayName(s) : "?"}`;
+    return fit(`${A.inverse} scout ${A.reset} ${A.grey}${about}:${A.reset} ${asking.text}${A.inverse} ${A.reset}  ${A.grey}enter ask · tab ${asking.all ? "this session" : "all sessions"} · esc cancel${A.reset}`, width);
+  }
   if (replying !== null) {
     const s = selected();
     return fit(`${A.inverse} reply ${A.reset} ${A.grey}to ${s ? core.displayName(s) : "?"}:${A.reset} ${replying}${A.inverse} ${A.reset}  ${A.grey}enter send · esc cancel${A.reset}`, width);
   }
   if (flash && flash.until > Date.now()) return fit(` ${A.bold}${flash.text}${A.reset}`, width);
   const keys = [
-    ["j/k ^n/^p", "move"], ["/", "find"], ["s", "sort"], ["enter", "open"], ["n", "next waiting"], ["1-4", "tabs"], ["J/K ^d/^u", "scroll"],
-    ["r", "reply"], ["p", "park"], ["a", "new"], ["x", "close"], ["?", "ask"], ["c", "close ask"], ["R", "resume lost"], ["o", "web"], ["q", "quit"],
+    ["j/k ^n/^p", "move"], ["/", "find"], ["s", "sort"], ["enter", "open"], ["n", "next waiting"], ["1-5", "tabs"], ["J/K ^d/^u", "scroll"],
+    ["r", "reply"], ["p", "park"], ["a", "new"], ["x", "close"], ["?", "ask"], ["b", "report"], ["w", "write-up"], ["S", "scout pane"], ["R", "resume lost"], ["o", "web"], ["q", "quit"],
   ];
   return fit(` ${keys.map(([k, v]) => `${A.bold}${k}${A.reset} ${A.grey}${v}${A.reset}`).join("  ")}`, width);
 }
@@ -555,6 +699,17 @@ function onKey(key: string) {
     else if (key >= " " && !key.startsWith("\x1b")) composing += key;
     return;
   }
+  if (asking !== null) {
+    if (key === "\x1b") asking = null;
+    else if (key === "\t") asking.all = !asking.all;
+    else if (key === "\r") {
+      const { text, all } = asking;
+      asking = null;
+      if (text.trim()) ask(text.trim(), all);
+    } else if (key === "\x7f") asking.text = asking.text.slice(0, -1);
+    else if (key >= " " && !key.startsWith("\x1b")) asking.text += key;
+    return;
+  }
   if (replying !== null) {
     if (key === "\x1b") replying = null;
     else if (key === "\r") {
@@ -622,6 +777,7 @@ function onKey(key: string) {
       }
       tab = TABS[i];
       tabPinned = true;
+      reportOpen = false;
       scroll = 0;
       follow = true;
       return;
@@ -650,26 +806,41 @@ function onKey(key: string) {
       if (selected() && ended(selected()!)) return say("That session has already ended.");
       confirmClose = selected()?.id ?? null;
       return;
-    case "?": {
+    case "?":
+      asking = { text: "", all: !selected() };
+      return;
+    case "S": {
       const pane = process.env.TMUX_PANE;
-      if (!pane) return say("The copilot needs reins to run in tmux.");
-      const message = ask(pane, selected());
+      if (!pane) return say("The scout pane needs reins to run in tmux.");
+      const message = scout.openPane(pane, selected());
       return message ? say(message) : undefined;
     }
     case "c": {
       const pane = process.env.TMUX_PANE;
-      return pane ? say(closeCopilot(pane)) : undefined;
+      return pane ? say(scout.closePane(pane)) : undefined;
     }
+    case "b":
+      if (reportOpen) reportOpen = false;
+      else if (scout.lastReport() || pending.has("report")) reportOpen = true;
+      else startReport(scout.brief(Date.now() - 4 * 3600_000));
+      scroll = 0;
+      return;
+    case "\x1b":
+      reportOpen = false;
+      return;
+    case "w":
+      return startReport(scout.writeup(24), (r) => say(copy(r.text) ? "Write-up copied to the clipboard." : "Write-up ready."));
     case "o": {
       const s = selected();
       Bun.spawn([process.env.CARRIOT_BIN ?? "carriot", "open", ...(s ? [s.id] : [])], { stdout: "ignore", stderr: "ignore" });
       return say("Opening the web dashboard…");
     }
   }
-  if (/^[1-4]$/.test(key)) {
+  if (/^[1-5]$/.test(key)) {
     const s = selected();
     const t = TABS[Number(key) - 1];
     if (s && available(s, t)) {
+      reportOpen = false;
       tab = t;
       tabPinned = true;
       scroll = 0;

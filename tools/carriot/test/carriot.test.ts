@@ -558,3 +558,21 @@ describe("tmux server restarts", () => {
     if (live.exitCode === 0) expect(serverGone(live.stdout.toString().trim())).toBe(false);
   });
 });
+
+describe("scout notes", () => {
+  test("one note per session and kind; the latest replaces it", () => {
+    db.putNote("s-note", "need", "waiting:1", "Approve the force-push");
+    db.putNote("s-note", "need", "waiting:2", "Review the PR");
+    db.putNote("s-note", "answer", null, "{}");
+    expect(db.getNote("s-note", "need")).toMatchObject({ key: "waiting:2", body: "Review the PR" });
+    expect(db.getNote("s-note", "answer")?.body).toBe("{}");
+    expect(db.getNote("other", "need")).toBeNull();
+  });
+
+  test("a needs-you line goes stale when the session changes state", async () => {
+    const { needKey } = await import("../src/scout");
+    const row = { state: "waiting", state_since: 5 } as Parameters<typeof needKey>[0];
+    expect(needKey(row)).toBe("waiting:5");
+    expect(needKey({ ...row, state: "question" })).not.toBe(needKey(row));
+  });
+});

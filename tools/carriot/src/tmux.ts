@@ -273,20 +273,20 @@ export function flash(message: string, ms: number): boolean {
   return tmux("display-message", "-d", String(ms), ...(pane ? ["-t", pane] : []), message) !== null;
 }
 
-/** The copilot pane in the same window as `pane`, marked with @carriot_copilot; null when there is none. */
-export function copilotPane(pane: string): string | null {
-  const out = tmux("list-panes", "-t", pane, "-F", "#{pane_id}\t#{@carriot_copilot}");
+/** The scout pane in the same window as `pane`, marked with @carriot_scout; null when there is none. */
+export function scoutPane(pane: string): string | null {
+  const out = tmux("list-panes", "-t", pane, "-F", "#{pane_id}\t#{@carriot_scout}");
   return out?.split("\n").map((l) => l.split("\t")).find(([, mark]) => mark === "1")?.[0] ?? null;
 }
 
-/** Splits a marked copilot pane off to the right of `pane`, running `command`; returns its id. */
-export function splitCopilot(pane: string, opts: { cwd: string; command: string; size: string }): string | null {
+/** Splits a marked scout pane off to the right of `pane`, running `command`; returns its id. */
+export function splitScout(pane: string, opts: { cwd: string; command: string; size: string }): string | null {
   const id = tmux("split-window", "-h", "-P", "-F", "#{pane_id}", "-t", pane, "-l", opts.size, "-c", opts.cwd, opts.command);
-  if (id) tmux("set-option", "-p", "-t", id, "@carriot_copilot", "1");
+  if (id) tmux("set-option", "-p", "-t", id, "@carriot_scout", "1");
   return id;
 }
 
-export const isCopilot = (pane: string) => tmux("display-message", "-p", "-t", pane, "#{@carriot_copilot}") === "1";
+export const isScout = (pane: string) => tmux("display-message", "-p", "-t", pane, "#{@carriot_scout}") === "1";
 
 export function killPane(pane: string): boolean {
   return tmux("kill-pane", "-t", pane) !== null;
@@ -302,7 +302,7 @@ export function focusPane(pane: string, text?: string): boolean {
  * Toggles reins: from any session, switch to the reins session (starting it with `command` if needed); from reins,
  * switch back to the session you came from.
  */
-export function toggleReins(command: string) {
+export function toggleReins(command: string): "in" | "out" {
   const pane = process.env.TMUX_PANE;
   const here = pane ? tmux("display-message", "-p", "-t", pane, "#{session_name}") : null;
   if (here === REINS) {
@@ -310,8 +310,9 @@ export function toggleReins(command: string) {
       const other = fallbackSession();
       if (other) tmux("switch-client", "-t", `=${other}`);
     }
-    return;
+    return "out";
   }
   if (tmux("has-session", "-t", `=${REINS}`) === null) tmux("new-session", "-d", "-s", REINS, "-n", "reins", command);
   tmux("switch-client", "-t", `=${REINS}`);
+  return "in";
 }

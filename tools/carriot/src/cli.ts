@@ -72,8 +72,11 @@ ${c.bold}REINS${c.reset}  ${c.dim}carriot reins${c.reset}
   a                 new agent window (type an optional first prompt, enter starts it)
   x                 close the selected session and its pane (y to confirm)
   o                 open in the web dashboard    q     quit
-  ?                 ask the copilot beside reins about the selected session (CARRIOT_COPILOT_MODEL)
-  c                 close the copilot (or prefix X / /exit inside it)
+  ?                 ask the scout about the selected session; tab switches to all sessions (searches ended ones too)
+  5                 scout tab: the answer, and what a waiting session needs from you
+  b                 report panel: briefing on what changed while you were away, write-up, cross-session answers
+  w                 write-up of the last 24h for your team (copied to the clipboard; also carriot writeup)
+  S                 scout pane for follow-up questions; c closes it (or prefix X / /exit inside it)
 
 ${c.bold}PICKER POPUP${c.reset}  ${c.dim}carriot pick${c.reset}
   type to filter    enter jump    ctrl-p plan    ctrl-r PR preview
@@ -103,6 +106,7 @@ ${c.bold}COMMANDS${c.reset}
   carriot resume --lost         reopen everything lost in the last day (crash, reboot, killed window)
   carriot ls --ended            list ended sessions from the last week
   carriot prs                   refresh and list each session's ticket and PR (CI, review, comments)
+  carriot writeup [--hours N]   status update of the last N hours (default 24), written by the scout
   carriot watch                 PR watcher loop (tmux starts it; one copy at a time)
   carriot plan <name|id>        show the latest plan
   carriot pr <name|id>          show the latest PR preview
@@ -359,7 +363,7 @@ async function main() {
       core.reconcile();
       const pane = process.env.TMUX_PANE;
       const s = rest[0] ? need(rest[0]) : core.sorted().find((x) => x.pane === pane);
-      if (!s && pane && tmux.isCopilot(pane)) return tmux.killPane(pane);
+      if (!s && pane && tmux.isScout(pane)) return tmux.killPane(pane);
       if (!s) return notify("no agent session in this pane", true);
       const r = core.close(s);
       return notify(r.message, !r.ok);
@@ -411,7 +415,9 @@ async function main() {
         const pane = process.env.TMUX_PANE;
         const from = pane ? db.liveSessions().find((s) => s.pane === pane) : undefined;
         if (from) db.putSetting("reins_focus", JSON.stringify({ id: from.id, at: Date.now() }));
-        return tmux.toggleReins(`${self()} reins`);
+        // Reins briefs you on what changed when you come back after a while.
+        db.putSetting(tmux.toggleReins(`${self()} reins`) === "in" ? "reins_entered" : "reins_left", String(Date.now()));
+        return;
       }
       const { reins } = await import("./reins");
       return reins();
@@ -498,6 +504,13 @@ async function main() {
       const { installApp } = await import("./app");
       const path = installApp(process.env.CARRIOT_PORT ?? "7777");
       return console.log(`installed ${path}; carriot open (⌘⇧O) now opens it`);
+    }
+    case "writeup": {
+      const { writeup } = await import("./scout");
+      const i = rest.indexOf("--hours");
+      const r = await writeup(i >= 0 ? Number(rest[i + 1]) || 24 : 24);
+      if (!r) return notify("the scout could not write it up", true);
+      return markdown(r.text);
     }
     case "watch": {
       const { watch } = await import("./watch");
