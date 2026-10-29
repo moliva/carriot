@@ -273,6 +273,25 @@ export function flash(message: string, ms: number): boolean {
   return tmux("display-message", "-d", String(ms), ...(pane ? ["-t", pane] : []), message) !== null;
 }
 
+/** The copilot pane in the same window as `pane`, marked with @carriot_copilot; null when there is none. */
+export function copilotPane(pane: string): string | null {
+  const out = tmux("list-panes", "-t", pane, "-F", "#{pane_id}\t#{@carriot_copilot}");
+  return out?.split("\n").map((l) => l.split("\t")).find(([, mark]) => mark === "1")?.[0] ?? null;
+}
+
+/** Splits a marked copilot pane off to the right of `pane`, running `command`; returns its id. */
+export function splitCopilot(pane: string, opts: { cwd: string; command: string; size: string }): string | null {
+  const id = tmux("split-window", "-h", "-P", "-F", "#{pane_id}", "-t", pane, "-l", opts.size, "-c", opts.cwd, opts.command);
+  if (id) tmux("set-option", "-p", "-t", id, "@carriot_copilot", "1");
+  return id;
+}
+
+/** Focuses a pane and, if given, types `text` into it without submitting. */
+export function focusPane(pane: string, text?: string): boolean {
+  if (tmux("select-pane", "-t", pane) === null) return false;
+  return !text || tmux("send-keys", "-t", pane, "-l", text) !== null;
+}
+
 /**
  * Toggles reins: from any session, switch to the reins session (starting it with `command` if needed); from reins,
  * switch back to the session you came from.
