@@ -313,6 +313,15 @@ function windowCommand(args: string[], env: Record<string, string> = {}): string
 }
 
 /**
+ * Adds who started a session to its first prompt. Peers find each other in ListAgents, which lists panes, so the
+ * spawner's tmux pane is the address the new session can reply to. Appended, so a leading slash command still runs.
+ */
+export function withSpawnerNote(prompt: string, spawner: SessionRow | null): string {
+  if (!spawner?.pane) return prompt;
+  return `${prompt}\n\n---\nStarted by ${displayName(spawner)} in tmux pane ${spawner.pane}. When you finish, or need a decision from the user, send that session a short message: it is the ListAgents peer on that pane.`;
+}
+
+/**
  * Starts a new Claude session: a tmux window next to the current one that drops into a shell when Claude exits,
  * or a `claude --bg` background session.
  */
@@ -339,11 +348,13 @@ export function newAgent(opts: {
     const out = `${p.stdout}${p.stderr}`.trim();
     return { ok: p.exitCode === 0, message: out || "Started in the background." };
   }
+  const spawner = process.env.TMUX_PANE ? db.liveSessions().find((s) => s.pane === process.env.TMUX_PANE) : undefined;
+  const brief = prompt ? withSpawnerNote(prompt, spawner ?? null) : prompt;
   const pane = tmux.newWindow({
     cwd: opts.cwd,
     name: opts.name ?? "claude",
     detach: opts.detach,
-    command: windowCommand([...flags, ...(prompt ? [shellQuote(prompt)] : [])], agentEnv()),
+    command: windowCommand([...flags, ...(brief ? [shellQuote(brief)] : [])], agentEnv()),
   });
   if (!pane) return { ok: false, message: "Could not open a tmux window (is tmux running?)." };
   // A detached start is for someone to attach to later: keep it in the park, out of the way of the current session.

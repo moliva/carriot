@@ -576,3 +576,22 @@ describe("scout notes", () => {
     expect(needKey({ ...row, state: "question" })).not.toBe(needKey(row));
   });
 });
+
+describe("spawner note", () => {
+  const spawner = { id: "3c0808e4-x", name: null, title: null, cwd: "/x/sessions/BEPLAT-1/repo", pane: "%331" } as NonNullable<Parameters<typeof core.withSpawnerNote>[1]>;
+
+  test("no spawner leaves the prompt alone", () => {
+    expect(core.withSpawnerNote("/carriot:new BEPLAT-1", null)).toBe("/carriot:new BEPLAT-1");
+  });
+
+  test("a spawner without a pane leaves the prompt alone", () => {
+    expect(core.withSpawnerNote("/carriot:new BEPLAT-1", { ...spawner, pane: null })).toBe("/carriot:new BEPLAT-1");
+  });
+
+  test("names the spawner's pane and keeps the slash command first", () => {
+    const out = core.withSpawnerNote("/carriot:new BEPLAT-1", spawner);
+    expect(out.startsWith("/carriot:new BEPLAT-1\n")).toBe(true);
+    expect(out).toContain("tmux pane %331");
+    expect(out).toContain("BEPLAT-1/repo");
+  });
+});
