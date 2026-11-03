@@ -45,11 +45,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     return true
   }
 
-  /// carriot://focus/<session id> brings the window forward on that session; carriot://open just brings it forward.
+  /// carriot://focus/<session id> brings the window forward on that session; carriot://jump/<session id> unparks it and
+  /// switches tmux to its window; carriot://open just brings the window forward.
   func application(_ application: NSApplication, open urls: [URL]) {
     for url in urls where url.scheme == "carriot" {
-      focus(url.host == "focus" ? url.pathComponents.dropFirst().first : nil)
+      if url.host == "jump" {
+        jump(url.pathComponents.dropFirst().first)
+      } else {
+        focus(url.host == "focus" ? url.pathComponents.dropFirst().first : nil)
+      }
     }
+  }
+
+  /// Runs `carriot jump <session>`, which unparks it, switches tmux to its window and brings the terminal forward.
+  private func jump(_ id: String?) {
+    let safe = (id ?? "").filter { $0.isLetter || $0.isNumber || $0 == "-" }
+    guard !safe.isEmpty else { return }
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/sh")
+    process.arguments = ["-c", "\"$0\" jump \"$1\"", carriot, safe]
+    try? process.run()
   }
 
   private func show() {
