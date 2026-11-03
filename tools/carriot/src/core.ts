@@ -322,7 +322,7 @@ export function newAgent(opts: {
   cwd?: string;
   name?: string;
   skipPermissions?: boolean;
-  /** Open the window without switching to it, e.g. when one agent spawns another for you to attach to later. */
+  /** Start it parked, without switching to it, e.g. when one agent spawns another for you to attach to later. */
   detach?: boolean;
 }): { ok: boolean; message: string; pane?: string } {
   const claude = Bun.which("claude") ?? "claude";
@@ -346,6 +346,8 @@ export function newAgent(opts: {
     command: windowCommand([...flags, ...(prompt ? [shellQuote(prompt)] : [])], agentEnv()),
   });
   if (!pane) return { ok: false, message: "Could not open a tmux window (is tmux running?)." };
+  // A detached start is for someone to attach to later: keep it in the park, out of the way of the current session.
+  if (opts.detach) tmux.park(pane);
   return { ok: true, message: prompt ? `new agent: ${prompt.slice(0, 50)}` : "new agent started", pane };
 }
 

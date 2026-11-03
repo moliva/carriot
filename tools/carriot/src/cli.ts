@@ -95,7 +95,7 @@ ${c.bold}COMMANDS${c.reset}
             [--here|--cwd D]  start in this pane's directory / D (default: carriot root)
             [--safe]          keep normal permission prompts
             [--name N]        window name (default: claude)
-            [-d|--detach]     open it without switching to it (for agents spawning sessions)
+            [-d|--detach]     start it parked, without switching to it (for agents spawning sessions)
   carriot ls [--json]           list live sessions, most urgent first
   carriot next                  jump to the session that has waited the longest
   carriot jump <name|id>        switch tmux to a session (unparks or attaches first)
