@@ -64,7 +64,7 @@
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
-    "excludedCommands": ["git", "gh", "tmux", "gpg", "gpgconf", "gpg-agent", "gpg-connect-agent", "yarn", "npm", "npx", "bun", "just", "cargo", "pham", "aws"],
+    "excludedCommands": ["git", "gh", "tmux", "gpg", "gpgconf", "gpg-agent", "gpg-connect-agent", "yarn", "npm", "npx", "bun", "just", "cargo", "pham", "aws", "bin/carriot", "~/carriot/bin/carriot", "/Users/moliva/carriot/bin/carriot"],
     "filesystem": {
       "allowWrite": ["/tmp", "~/.gnupg", "~/.pham", "/Users/moliva/carriot/sessions", "/Users/moliva/carriot/.base"],
       "allowRead": ["~/.ssh/known_hosts"]

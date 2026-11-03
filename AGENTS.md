@@ -51,7 +51,7 @@ When the user asks you to start, spawn or open a session for some work (typicall
 ~/carriot/bin/carriot new -d --name <desc> '<prompt>'
 ```
 
-- `-d` opens a tmux window next to yours without switching the user to it. Run it with `dangerouslyDisableSandbox: true`, because the sandbox blocks the tmux socket.
+- `-d` opens a tmux window next to yours without switching the user to it. `bin/carriot` is excluded from the sandbox, which blocks the tmux socket; if it still fails with "Could not open a tmux window", rerun it with `dangerouslyDisableSandbox: true`.
 - `<desc>` is a 1–3 word hyphenated label, the same as a window name (see Tmux below).
 - `<prompt>` is the new session's first message, and that session starts with no context. For a ticket, use `/carriot:new <TICKET-ID>` followed by anything from this conversation it needs (decisions, scope, which repos). For other work, write a self-contained brief.
 - Start one session per piece of work. Then tell the user what you started and that they can reach it from reins (`prefix T`) or with `carriot jump <name>`.
