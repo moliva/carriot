@@ -291,6 +291,9 @@ export function ago(ts: number): string {
   return `${Math.floor(s / 86400)}d`;
 }
 
+/** Model new agents start on; the default needs an OpenRouter `ANTHROPIC_BASE_URL`. */
+const AGENT_MODEL = process.env.CARRIOT_AGENT_MODEL ?? "openrouter/auto";
+
 const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 /** Window command: runs claude through an interactive shell (so PATH and rc files apply), then leaves that shell. */
@@ -314,7 +317,7 @@ export function newAgent(opts: {
   detach?: boolean;
 }): { ok: boolean; message: string; pane?: string } {
   const claude = Bun.which("claude") ?? "claude";
-  const flags = opts.skipPermissions === false ? [] : ["--dangerously-skip-permissions"];
+  const flags = ["--model", AGENT_MODEL, ...(opts.skipPermissions === false ? [] : ["--dangerously-skip-permissions"])];
   const prompt = opts.prompt?.trim();
   if (opts.background) {
     if (!prompt) return { ok: false, message: "A background session needs a first prompt." };
