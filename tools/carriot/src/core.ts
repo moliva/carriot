@@ -293,13 +293,22 @@ export function ago(ts: number): string {
 
 /** Model new agents start on; the default needs an OpenRouter `ANTHROPIC_BASE_URL`. */
 const AGENT_MODEL = process.env.CARRIOT_AGENT_MODEL ?? "openrouter/auto";
+/**
+ * Context window Claude Code assumes for new agents. It doesn't know openrouter/auto and would compact at its default
+ * window, though the router can serve up to 2M tokens; an empty value leaves Claude Code's own guess.
+ */
+const AGENT_CONTEXT_TOKENS =
+  process.env.CARRIOT_AGENT_CONTEXT_TOKENS ?? (AGENT_MODEL === "openrouter/auto" ? "1000000" : "");
+const agentEnv = (): Record<string, string> =>
+  AGENT_CONTEXT_TOKENS ? { CLAUDE_CODE_MAX_CONTEXT_TOKENS: AGENT_CONTEXT_TOKENS } : {};
 
 const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 /** Window command: runs claude through an interactive shell (so PATH and rc files apply), then leaves that shell. */
-function windowCommand(args: string[]): string {
+function windowCommand(args: string[], env: Record<string, string> = {}): string {
   const shell = process.env.SHELL || "/bin/zsh";
-  const cmd = ["claude", ...args].join(" ");
+  const vars = Object.entries(env).map(([k, v]) => `${k}=${shellQuote(v)}`);
+  const cmd = [...vars, "claude", ...args].join(" ");
   return `${shell} -ic ${shellQuote(`${cmd}; exec ${shell} -l`)}`;
 }
 
@@ -321,7 +330,12 @@ export function newAgent(opts: {
   const prompt = opts.prompt?.trim();
   if (opts.background) {
     if (!prompt) return { ok: false, message: "A background session needs a first prompt." };
-    const p = Bun.spawnSync([claude, "--bg", ...flags, prompt], { cwd: opts.cwd, stdout: "pipe", stderr: "pipe" });
+    const p = Bun.spawnSync([claude, "--bg", ...flags, prompt], {
+      cwd: opts.cwd,
+      env: { ...process.env, ...agentEnv() },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     const out = `${p.stdout}${p.stderr}`.trim();
     return { ok: p.exitCode === 0, message: out || "Started in the background." };
   }
@@ -329,7 +343,7 @@ export function newAgent(opts: {
     cwd: opts.cwd,
     name: opts.name ?? "claude",
     detach: opts.detach,
-    command: windowCommand([...flags, ...(prompt ? [shellQuote(prompt)] : [])]),
+    command: windowCommand([...flags, ...(prompt ? [shellQuote(prompt)] : [])], agentEnv()),
   });
   if (!pane) return { ok: false, message: "Could not open a tmux window (is tmux running?)." };
   return { ok: true, message: prompt ? `new agent: ${prompt.slice(0, 50)}` : "new agent started", pane };

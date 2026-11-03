@@ -115,6 +115,7 @@ Optional: `brew install glow git-delta` for nicer plan and diff rendering in the
 | `CARRIOT_DEBUG` | off | log raw hook payloads to the `events` table (last 1000) |
 | `CARRIOT_TERMINAL_APP` | `WezTerm` | app brought to front when jumping from the dashboard |
 | `CARRIOT_AGENT_MODEL` | `openrouter/auto` | model for new agents (`carriot new`, `prefix A`, `a` in reins); the default needs an OpenRouter `ANTHROPIC_BASE_URL` |
+| `CARRIOT_AGENT_CONTEXT_TOKENS` | `1000000` with `openrouter/auto` | context window new agents assume (`CLAUDE_CODE_MAX_CONTEXT_TOKENS`); Claude Code doesn't know the auto router's window. Empty leaves Claude Code's guess |
 | `CARRIOT_SCOUT_MODEL` | `deepseek/deepseek-v4.1-flash` | model for the scout; the default needs an OpenRouter `ANTHROPIC_BASE_URL`, otherwise use e.g. `haiku` |
 | `CARRIOT_SCOUT_WIDTH` | `40%` | width of the scout pane |
 | `CARRIOT_BRIEF_AFTER_MINUTES` | `15` | time away from reins after which coming back opens a briefing |
