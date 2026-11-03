@@ -96,7 +96,7 @@ local carriot_ok, carriot = pcall(dofile, os.getenv("HOME") .. "/carriot/tools/c
 if carriot_ok then carriot.apply(config, keys) end
 ```
 
-New sessions: `carriot new [prompt]` (or `prefix A`, `a` in reins) opens a tmux window next to the current one running `claude --dangerously-skip-permissions` from the carriot root, so the hooks apply. `--bg` starts a background session instead, `--here` uses the current directory, `--safe` keeps permission prompts.
+New sessions: `carriot new [prompt]` (or `prefix A`, `a` in reins) opens a tmux window next to the current one running `claude --dangerously-skip-permissions` from the carriot root, so the hooks apply. `--bg` starts a background session instead, `--here` uses the current directory, `--safe` keeps permission prompts. `-d` / `--detach` opens the window without switching to it and prints the result. Agents use it to spawn a session for you to attach to later: the hub `CLAUDE.md` tells a management session to run `carriot new -d --name <desc> '/carriot:new <TICKET>'` instead of doing the work itself.
 
 Optional: `brew install glow git-delta` for nicer plan and diff rendering in the terminal.
 

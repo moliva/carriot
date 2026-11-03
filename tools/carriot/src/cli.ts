@@ -94,6 +94,8 @@ ${c.bold}COMMANDS${c.reset}
             [--bg]            start it as a background session instead (needs a prompt)
             [--here|--cwd D]  start in this pane's directory / D (default: carriot root)
             [--safe]          keep normal permission prompts
+            [--name N]        window name (default: claude)
+            [-d|--detach]     open it without switching to it (for agents spawning sessions)
   carriot ls [--json]           list live sessions, most urgent first
   carriot next                  jump to the session that has waited the longest
   carriot jump <name|id>        switch tmux to a session (unparks or attaches first)
@@ -486,6 +488,7 @@ async function main() {
           bg: { type: "boolean" },
           here: { type: "boolean" },
           safe: { type: "boolean" },
+          detach: { type: "boolean", short: "d" },
           cwd: { type: "string" },
           name: { type: "string" },
         },
@@ -496,7 +499,17 @@ async function main() {
         cwd: v.cwd ?? (v.here ? undefined : CARRIOT_ROOT),
         name: v.name,
         skipPermissions: !v.safe,
+        detach: v.detach,
       });
+      // Detached starts usually come from another agent: answer on stdout too, with an exit code it can check.
+      if (v.detach) {
+        tmux.flash(`carriot: ${r.message}`, r.ok ? 3000 : 4000);
+        if (!r.ok) {
+          console.error(r.message);
+          process.exit(1);
+        }
+        return console.log(`${r.message}${r.pane ? ` (pane ${r.pane})` : ""}`);
+      }
       return notify(r.message, !r.ok);
     }
     case "app": {

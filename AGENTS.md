@@ -43,6 +43,20 @@ When given a ticket:
 6. **Work in the worktrees** — all commits, pushes, and PRs happen there, never in `.base/`.
 7. **Switch working directory** to the session worktree after creation (e.g., `sessions/PROJ-42/cosmic-dolphin/`).
 
+## Spawning sessions
+
+When the user asks you to start, spawn or open a session for some work (typically from a management session holding a list of tickets), do **not** do the work in this session. Start a separate session that carriot tracks, which they can attach to later from reins:
+
+```sh
+~/carriot/bin/carriot new -d --name <desc> '<prompt>'
+```
+
+- `-d` opens a tmux window next to yours without switching the user to it. Run it with `dangerouslyDisableSandbox: true`, because the sandbox blocks the tmux socket.
+- `<desc>` is a 1–3 word hyphenated label, the same as a window name (see Tmux below).
+- `<prompt>` is the new session's first message, and that session starts with no context. For a ticket, use `/carriot:new <TICKET-ID>` followed by anything from this conversation it needs (decisions, scope, which repos). For other work, write a self-contained brief.
+- Start one session per piece of work. Then tell the user what you started and that they can reach it from reins (`prefix T`) or with `carriot jump <name>`.
+- Add `--bg` to start a Claude background session instead of a tmux window, if the user asks for that.
+
 ## Review Sessions
 
 Lightweight, ephemeral sessions for reviewing a PR or branch. No ticket required.

@@ -310,6 +310,8 @@ export function newAgent(opts: {
   cwd?: string;
   name?: string;
   skipPermissions?: boolean;
+  /** Open the window without switching to it, e.g. when one agent spawns another for you to attach to later. */
+  detach?: boolean;
 }): { ok: boolean; message: string; pane?: string } {
   const claude = Bun.which("claude") ?? "claude";
   const flags = opts.skipPermissions === false ? [] : ["--dangerously-skip-permissions"];
@@ -323,6 +325,7 @@ export function newAgent(opts: {
   const pane = tmux.newWindow({
     cwd: opts.cwd,
     name: opts.name ?? "claude",
+    detach: opts.detach,
     command: windowCommand([...flags, ...(prompt ? [shellQuote(prompt)] : [])]),
   });
   if (!pane) return { ok: false, message: "Could not open a tmux window (is tmux running?)." };

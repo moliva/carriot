@@ -251,7 +251,7 @@ export function sendText(pane: string, text: string, opts: { escapeFirst?: boole
 }
 
 /** Opens a window right after the current one (or in the first session outside tmux) and selects it. */
-export function newWindow(opts: { cwd?: string; name: string; command?: string; session?: string }): string | null {
+export function newWindow(opts: { cwd?: string; name: string; command?: string; session?: string; detach?: boolean }): string | null {
   const pane = process.env.TMUX_PANE;
   // Next to the current window, unless that is reins or the park; then in the session you came from.
   const own = pane ? OWN.has(tmux("display-message", "-p", "-t", pane, "#{session_name}") ?? "") : false;
@@ -263,6 +263,8 @@ export function newWindow(opts: { cwd?: string; name: string; command?: string; 
     : home && !pane
       ? ["-d", "-t", `=${home}:`]
       : ["-t", `=${currentSession() ?? home ?? fallbackSession() ?? ""}:`];
+  // Detached: open it without switching the client away from the window you are in.
+  if (opts.detach && !placement.includes("-d")) placement.unshift("-d");
   const cwd = opts.cwd ?? (pane ? tmux("display-message", "-p", "-t", pane, "#{pane_current_path}") : null);
   return tmux("new-window", "-P", "-F", "#{pane_id}", ...placement, "-n", opts.name, ...(cwd ? ["-c", cwd] : []), ...(opts.command ? [opts.command] : []));
 }
