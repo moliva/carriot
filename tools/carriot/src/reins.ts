@@ -318,13 +318,23 @@ function copy(text: string): boolean {
 const AWAY_MS = Number(process.env.CARRIOT_BRIEF_AFTER_MINUTES ?? 15) * 60_000;
 let returnHandledAt = Date.now() - 10_000;
 
-/** Coming back to reins after a while away: brief on what changed meanwhile. */
+/** When reins was last left: where the daily brief starts, even when that was before a weekend or time off. */
+const lastVisit = () => Number(db.getSetting("reins_left") ?? 0) || Date.now() - DAY;
+const briefMade = (ts: number) => db.getSetting("brief_day") === scout.dayKey(ts);
+
+/** The first visit of each day, or one after a while away, opens a brief of what changed and what is still open. */
 function takeReturn() {
   const entered = Number(db.getSetting("reins_entered") ?? 0);
   if (entered <= returnHandledAt) return;
   returnHandledAt = entered;
   const left = Number(db.getSetting("reins_left") ?? 0);
-  if (left && entered - left >= AWAY_MS && !pending.has("report")) startReport(scout.brief(left));
+  if (!left || pending.has("report")) return;
+  if (!briefMade(entered) || entered - left >= AWAY_MS) startReport(scout.brief(left));
+}
+
+/** Reins started fresh (no toggle, e.g. after a reboot): still brief once on the first start of the day. */
+function briefOnStart() {
+  if (!briefMade(Date.now()) && !pending.has("report")) startReport(scout.brief(lastVisit()));
 }
 
 /** Last focus request handled; requests come from the toggle, through the database. */
@@ -822,7 +832,7 @@ function onKey(key: string) {
     case "b":
       if (reportOpen) reportOpen = false;
       else if (scout.lastReport() || pending.has("report")) reportOpen = true;
-      else startReport(scout.brief(Date.now() - 4 * 3600_000));
+      else startReport(scout.brief(lastVisit()));
       scroll = 0;
       return;
     case "\x1b":
@@ -901,6 +911,7 @@ export function reins() {
     process.exit(1);
   });
   refresh(true);
+  briefOnStart();
   draw();
   let polling = false;
   const pollBackground = async () => {

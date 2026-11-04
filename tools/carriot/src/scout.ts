@@ -153,18 +153,56 @@ export function lastReport(): (Report & { at: number }) | null {
 
 const hhmm = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-/** What changed while you were away from reins. */
+/** Local calendar day of `ts` as YYYY-MM-DD; the daily brief is made once per day. */
+export const dayKey = (ts: number) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+/** "14:05" for today, "Fri 18:42" for another day, so a brief after a weekend says when it starts. */
+export function when(ts: number, now = Date.now()): string {
+  if (dayKey(ts) === dayKey(now)) return hhmm(ts);
+  return `${new Date(ts).toLocaleDateString([], { weekday: "short" })} ${hhmm(ts)}`;
+}
+
+/** Most untouched live sessions the brief lists; the rest are only counted. */
+const OPEN_LIMIT = 15;
+
+/**
+ * The daily brief: what happened since you last had reins open (`since`, which spans a night, a weekend or time off),
+ * plus what is still open, so work you left waiting on you comes back even if nothing touched it meanwhile.
+ */
 export async function brief(since: number): Promise<Report | null> {
+  const now = Date.now();
   const list = touched(since);
-  const title = `While you were away · since ${hhmm(since)}`;
-  if (!list.length) return saveReport({ title, text: "Nothing changed." });
-  const prompt = `These agent sessions changed since ${new Date(since).toISOString()}:
+  const seen = new Set(list.map((s) => s.id));
+  const idle = core.sorted().filter((s) => !seen.has(s.id));
+  const title = `Daily brief · ${new Date(now).toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" })} · since ${when(since, now)}`;
+  if (!list.length && !idle.length) return done({ title, text: "Nothing changed, and nothing is open." }, now);
+  const open = idle.slice(0, OPEN_LIMIT);
+  const prompt = `The user is starting their day and last had reins open at ${new Date(since).toISOString()}. Help them remember what they left.
 
-${list.map((s) => facts(s, 600)).join("\n\n")}
+## Changed since then (${list.length})
 
-Brief the user in at most 5 short bullets, most urgent first: what finished, what waits on them and why, and PR changes (CI, reviews, merges). Name sessions as they are named above. Markdown, no preamble.`;
-  const text = await run(prompt, { tools: false });
-  return text ? saveReport({ title, text }) : null;
+${list.length ? list.map((s) => facts(s, 600)).join("\n\n") : "Nothing."}
+
+## Still open, untouched since (${idle.length}${idle.length > open.length ? `, ${open.length} shown` : ""})
+
+${open.length ? open.map((s) => facts(s, 400)).join("\n\n") : "Nothing."}
+
+Write the brief in markdown, no preamble, skipping empty groups:
+- **Waiting on you**: sessions that need a decision, approval, review or reply, and what exactly, most urgent first.
+- **Since you left**: what finished, and PR changes (CI, reviews, merges).
+- **Still open**: unfinished work worth picking back up, one line each; fold a long tail into a count.
+At most 10 bullets in all. Name sessions as they are named above.`;
+  const text = await run(prompt, { tools: false, timeoutMs: 120_000 });
+  return text ? done({ title, text }, now) : null;
+}
+
+/** Saves a brief and marks today's as made, so reins does not open another on the next visit. */
+function done(r: Report, now: number) {
+  db.putSetting("brief_day", dayKey(now));
+  return saveReport(r);
 }
 
 /** Standup-style write-up of the last `hours` of work, in the user's project update style. */

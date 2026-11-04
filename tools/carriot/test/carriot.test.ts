@@ -577,6 +577,24 @@ describe("scout notes", () => {
   });
 });
 
+describe("daily brief", () => {
+  test("dayKey is the local calendar day", async () => {
+    const { dayKey } = await import("../src/scout");
+    expect(dayKey(new Date(2026, 10, 4, 0, 5).getTime())).toBe("2026-11-04");
+    expect(dayKey(new Date(2026, 10, 3, 23, 59).getTime())).toBe("2026-11-03");
+  });
+
+  test("a start from another day says which day", async () => {
+    const { when } = await import("../src/scout");
+    const now = new Date(2026, 10, 4, 9, 0).getTime();
+    const sameDay = when(new Date(2026, 10, 4, 7, 30).getTime(), now);
+    const friday = when(new Date(2026, 10, 1, 18, 42).getTime(), now);
+    expect(sameDay).not.toMatch(/[A-Za-z]{3}/);
+    expect(friday).toMatch(/^\S+ /);
+    expect(friday).not.toBe(sameDay);
+  });
+});
+
 describe("spawner note", () => {
   const spawner = { id: "3c0808e4-x", name: null, title: null, cwd: "/x/sessions/BEPLAT-1/repo", pane: "%331" } as NonNullable<Parameters<typeof core.withSpawnerNote>[1]>;
 
