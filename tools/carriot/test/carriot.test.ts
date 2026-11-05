@@ -680,9 +680,27 @@ describe("alfred workflow", () => {
     expect(alfred.sessionItems([entry()], "drift").map((i) => i.arg)).toEqual(["session:id-1"]);
   });
 
+  test("a PR is read from a pull request link or a repo#number, nothing else", () => {
+    expect(alfred.parsePr("https://github.com/acme/api/pull/321/files")).toEqual({ owner: "acme", repo: "api", number: 321, ref: "https://github.com/acme/api/pull/321" });
+    expect(alfred.parsePr(" api#321 ")).toEqual({ owner: null, repo: "api", number: 321, ref: "api#321" });
+    expect(alfred.parsePr("acme/api#321")).toMatchObject({ owner: "acme", repo: "api", number: 321 });
+    expect(alfred.parsePr("#321")).toBeNull();
+    expect(alfred.parsePr("fix api#321 later")).toBeNull();
+    expect(alfred.parsePr("ABC-12")).toBeNull();
+  });
+
+  test("a pasted PR offers a review session after the sessions already on it", () => {
+    const tracked = entry({ pr: { ...pr, repo: "acme/api", number: 321 } });
+    for (const q of ["api#321", "https://github.com/acme/api/pull/321"])
+      expect(alfred.sessionItems([tracked], q).map((i) => i.arg)).toEqual(["session:id-1", `review:${q}`]);
+    expect(alfred.sessionItems([], "web#5").map((i) => i.arg)).toEqual(["review:web#5"]);
+    expect(alfred.sessionItems([tracked], "https://linear.app/acme/issue/ABC-12/x").map((i) => i.arg)).toEqual(["session:id-1", "new:ABC-12"]);
+  });
+
   test("the action ignores anything it does not know", () => {
     expect(alfred.go("open:file:///etc/passwd", "/hub")).toBe("");
     expect(alfred.go("whatever", "/hub")).toBe("");
     expect(alfred.go("new:not a ticket", "/hub")).toContain("not a ticket");
+    expect(alfred.go("review:not a pr", "/hub")).toContain("not a PR");
   });
 });

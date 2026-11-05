@@ -36,6 +36,8 @@ Agents without an adapter can push states directly: `carriot emit --agent pi --s
 
 **`cs [query]`** lists sessions. The first row is **Reins** (with how many sessions wait on you): enter switches to the reins session, starting it if needed, and brings the terminal forward, so `cs` then enter is the quickest way in; it stays on top for an empty query or one like `rein`. Below it come running sessions in reins order, then the ones that ended in the last week. The search covers the name, ticket id and title, PR number (`123`, `api#123`) and title, repo, branch and the latest prompt; PR links in a session's latest messages count too. Enter jumps to the session (unparking it, or resuming it when it ended); ⌘ opens its PR, ⌥ its Linear ticket, ⌃ the dashboard (needs Carriot.app).
 
+Pasting a PR link or typing `repo#123` (or `owner/repo#123`) adds "Review repo#123" after the matches: it runs `/review-pr <what you pasted>` in a new agent window named `review-repo-123`, and a session already on that PR is listed first.
+
 Typing a ticket id (`ABC-12`) or pasting a Linear link adds "Start a session for ABC-12" after the matches. It runs `/carriot:new ABC-12` in a new agent window next to your others and brings the terminal forward. A session already running for that ticket is listed first, so enter goes back to it instead of starting a duplicate. The window is named after the ticket (`abc-12`); the agent renames it once it has read the ticket.
 
 ## Tickets and PRs

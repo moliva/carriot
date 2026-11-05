@@ -11,7 +11,7 @@ import { linearLinks, prBadge, prRef, repoName, type PrStatus } from "./work";
 export interface AlfredItem {
   title: string;
   subtitle?: string;
-  /** What the workflow's action receives: `session:<id>`, `reins:`, `new:<TICKET>` or `open:<url>`. */
+  /** What the workflow's action receives: `session:<id>`, `reins:`, `new:<TICKET>`, `review:<PR>` or `open:<url>`. */
   arg?: string;
   valid?: boolean;
   mods?: Record<string, { arg?: string; subtitle?: string; valid?: boolean }>;
@@ -37,6 +37,22 @@ export function parseTicket(text: string): { id: string; url: string | null } | 
   if (link) return { id: link.id, url: link.url };
   const bare = text.trim().match(/^([A-Za-z][A-Za-z0-9]*-\d+)$/);
   return bare ? { id: bare[1].toUpperCase(), url: null } : null;
+}
+
+export interface PrRef {
+  owner: string | null;
+  repo: string;
+  number: number;
+  /** What goes after /review-pr: the link as pasted (canonical), or the short reference as typed. */
+  ref: string;
+}
+
+/** A GitHub PR from a pull request link (anywhere in the text) or from text that is just `repo#123` or `owner/repo#123`. */
+export function parsePr(text: string): PrRef | null {
+  const link = text.match(/https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/);
+  if (link) return { owner: link[1], repo: link[2], number: Number(link[3]), ref: link[0] };
+  const short = text.trim().match(/^(?:([\w.-]+)\/)?([\w.-]+)#(\d+)$/);
+  return short ? { owner: short[1] ?? null, repo: short[2], number: Number(short[3]), ref: text.trim() } : null;
 }
 
 /** `repo#123` for each GitHub pull request link in the text. */
@@ -137,6 +153,14 @@ function newItem(ticket: string, title: string | null, note: string): AlfredItem
   };
 }
 
+function reviewItem(p: PrRef): AlfredItem {
+  return {
+    title: `Review ${p.repo}#${p.number}`,
+    subtitle: "opens a new agent running /review-pr",
+    arg: `review:${p.ref}`,
+  };
+}
+
 /** The pinned row that opens reins; it stays out of the way once you search for something else. */
 function reinsItem(entries: Entry[]): AlfredItem {
   const waiting = entries.filter((e) => e.s.state !== "ended" && needsYou(e.s)).length;
@@ -149,14 +173,18 @@ function reinsItem(entries: Entry[]): AlfredItem {
 
 /**
  * The list: reins first (when the query is empty or looks for it), then the sessions matching the query. A typed
- * ticket id or Linear link also offers a new session after the matches; a session already running for that ticket
- * comes first, so enter goes back to it.
+ * ticket id or Linear link also offers a new session after the matches, and a PR reference or link offers a review
+ * session; a session already running for that ticket or PR comes first, so enter goes back to it.
  */
 export function sessionItems(entries: Entry[], query: string): AlfredItem[] {
-  const items = search(entries, query).map(toItem);
-  if (!query.trim() || fuzzyScore(query, "reins overview dashboard") !== null) items.unshift(reinsItem(entries));
   const t = parseTicket(query);
+  const p = t ? null : parsePr(query);
+  // A pasted link says what to look for; searching for the whole URL would find nothing.
+  const looking = t ? t.id : p ? `${p.repo}#${p.number}` : query;
+  const items = search(entries, looking).map(toItem);
+  if (!query.trim() || fuzzyScore(query, "reins overview dashboard") !== null) items.unshift(reinsItem(entries));
   if (t) items.push(newItem(t.id, db.getTicket(t.id)?.title ?? null, "opens a new agent running /carriot:new"));
+  if (p) items.push(reviewItem(p));
   return items.length ? items : [{ title: "No session matches", subtitle: "Search by name, ticket, PR number, repo or branch", valid: false }];
 }
 
@@ -177,12 +205,12 @@ function openSession(id: string): string {
   return r.message;
 }
 
-/** Starts an agent in the hub on the ticket, in a window next to your other sessions, and brings it to the front. */
-function startSession(ticket: string, hub: string): string {
-  const r = core.newAgent({ prompt: `/carriot:new ${ticket}`, cwd: hub, name: ticket.toLowerCase(), skipPermissions: true });
+/** Starts an agent in the hub with `prompt`, in a window next to your other sessions, and brings it to the front. */
+function startSession(prompt: string, name: string, hub: string): string {
+  const r = core.newAgent({ prompt, cwd: hub, name, skipPermissions: true });
   if (!r.ok) return r.message;
   if (r.pane) tmux.jump(r.pane, true);
-  return `started ${ticket}`;
+  return `started ${name}`;
 }
 
 /** Switches to the reins session (starting it when needed) and brings the terminal forward. */
@@ -205,7 +233,11 @@ export function go(arg: string, hub: string, bin = "carriot"): string {
       return openSession(value);
     case "new": {
       const t = parseTicket(value);
-      return t ? startSession(t.id, hub) : `not a ticket: ${value}`;
+      return t ? startSession(`/carriot:new ${t.id}`, t.id.toLowerCase(), hub) : `not a ticket: ${value}`;
+    }
+    case "review": {
+      const p = parsePr(value);
+      return p ? startSession(`/review-pr ${p.ref}`, `review-${p.repo}-${p.number}`.toLowerCase(), hub) : `not a PR: ${value}`;
     }
     case "open":
       if (!/^(https:\/\/|carriot:\/\/)/.test(value)) return "";
