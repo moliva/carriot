@@ -5,7 +5,7 @@ import * as db from "./db";
 import { fuzzyScore } from "./fuzzy";
 import * as tmux from "./tmux";
 import { isStale, label, needsYou, type SessionRow } from "./types";
-import { fetchTicket, linearLinks, prBadge, prRef, repoName, type PrStatus } from "./work";
+import { linearLinks, prBadge, prRef, repoName, type PrStatus } from "./work";
 
 /** One row of an Alfred script filter (https://www.alfredapp.com/help/workflows/inputs/script-filter/json/). */
 export interface AlfredItem {
@@ -137,49 +137,12 @@ function newItem(ticket: string, title: string | null, note: string): AlfredItem
   };
 }
 
-/** The `cs` list: sessions matching the query; a typed ticket or Linear link also offers a new session. */
+/** The list: sessions matching the query; a typed ticket id or Linear link also offers a new session, after the matches (a running session for that ticket comes first, so enter goes back to it). */
 export function sessionItems(entries: Entry[], query: string): AlfredItem[] {
   const items = search(entries, query).map(toItem);
   const t = parseTicket(query);
   if (t) items.push(newItem(t.id, db.getTicket(t.id)?.title ?? null, "opens a new agent running /carriot:new"));
   return items.length ? items : [{ title: "No session matches", subtitle: "Search by name, ticket, PR number, repo or branch", valid: false }];
-}
-
-/**
- * The `cn` list: a new session for the ticket in the query, or on the clipboard when the query is empty. A running
- * session for that ticket comes first, so enter goes back to it instead of starting a duplicate.
- */
-export async function newItems(entries: Entry[], query: string, clipboard: () => string): Promise<AlfredItem[]> {
-  const fromClipboard = !query.trim();
-  const t = parseTicket(fromClipboard ? clipboard() : query);
-  if (!t)
-    return [
-      {
-        title: fromClipboard ? "No Linear ticket on the clipboard" : "That is not a Linear ticket",
-        subtitle: "Paste a Linear link or type an id like ABC-123",
-        valid: false,
-      },
-    ];
-  let title = db.getTicket(t.id)?.title ?? null;
-  if (!title) {
-    const fetched = await fetchTicket(t.id);
-    title = fetched.title;
-    if (title) db.putTicket({ id: t.id, title, status: fetched.status, url: fetched.url });
-  }
-  const existing = entries.filter((e) => e.ticket === t.id);
-  const running = existing.filter((e) => e.s.state !== "ended").map(toItem);
-  const earlier = existing.filter((e) => e.s.state === "ended").map(toItem);
-  const note = [fromClipboard ? "from the clipboard" : null, running.length ? "another one alongside the running session" : null].filter(Boolean).join(", ");
-  return [...running, newItem(t.id, title, note), ...earlier];
-}
-
-export function readClipboard(): string {
-  try {
-    const p = Bun.spawnSync(["pbpaste"], { stdout: "pipe", stderr: "ignore", env: { ...process.env, LANG: "en_US.UTF-8" } });
-    return p.exitCode === 0 ? p.stdout.toString().slice(0, 4000) : "";
-  } catch {
-    return "";
-  }
 }
 
 /** Brings a session to the front: a running one is reconnected (unparked or attached), an ended one is resumed. */

@@ -521,12 +521,10 @@ async function main() {
     case "alfred": {
       const a = await import("./alfred");
       const [sub, ...args] = rest;
-      const items = (list: Awaited<ReturnType<typeof a.newItems>>) => console.log(JSON.stringify({ skipknowledge: true, items: list }));
+      const items = (list: ReturnType<typeof a.sessionItems>) => console.log(JSON.stringify({ skipknowledge: true, items: list }));
       switch (sub) {
         case "sessions":
           return items(a.sessionItems(a.loadEntries(), args.join(" ")));
-        case "new":
-          return items(await a.newItems(a.loadEntries(), args.join(" "), a.readClipboard));
         case "go": {
           const message = a.go(args.join(" "), CARRIOT_ROOT);
           if (message) console.log(message);
@@ -535,7 +533,7 @@ async function main() {
         case "install": {
           const path = a.buildWorkflow();
           if (!args.includes("--no-open")) Bun.spawnSync(["open", path]);
-          return console.log(`built ${path}; Alfred offers to import it (cs lists sessions, cn starts one on a ticket)`);
+          return console.log(`built ${path}; Alfred offers to import it (cs lists sessions and starts one on a ticket)`);
         }
         default:
           return notify("usage: carriot alfred install", true);

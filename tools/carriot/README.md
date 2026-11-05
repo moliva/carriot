@@ -34,10 +34,9 @@ Agents without an adapter can push states directly: `carriot emit --agent pi --s
 
 `carriot alfred install` zips `alfred/info.plist` into `~/.local/state/carriot/Carriot.alfredworkflow` and opens it; Alfred asks once whether to import. The workflow only calls `~/carriot/bin/carriot alfred …`, so changes to the lists or actions need no re-import (only a changed `info.plist` does).
 
-- **`cs [query]`** lists sessions: running ones in reins order, then the ones that ended in the last week. It searches the name, ticket id and title, PR number (`123`, `api#123`) and title, repo, branch and the latest prompt; PR links in a session's latest messages count too. Enter jumps to the session (unparking it, or resuming it when it ended); ⌘ opens its PR, ⌥ its Linear ticket, ⌃ the dashboard (needs Carriot.app). Typing a ticket id or Linear link also offers a new session at the end of the list.
-- **`cn [ticket]`** starts a session on a ticket: a Linear link or an id like `ABC-12`. With nothing typed it reads the clipboard. It runs `/carriot:new <TICKET>` in a new agent window next to your others and brings the terminal forward. A session already running for that ticket is listed first, so enter goes back to it instead of starting a duplicate.
+**`cs [query]`** lists sessions: running ones in reins order, then the ones that ended in the last week. It searches the name, ticket id and title, PR number (`123`, `api#123`) and title, repo, branch and the latest prompt; PR links in a session's latest messages count too. Enter jumps to the session (unparking it, or resuming it when it ended); ⌘ opens its PR, ⌥ its Linear ticket, ⌃ the dashboard (needs Carriot.app).
 
-The window is named after the ticket (`abc-12`); the agent renames it once it has read the ticket. The ticket title shows when Linear is configured (see below).
+Typing a ticket id (`ABC-12`) or pasting a Linear link adds "Start a session for ABC-12" after the matches. It runs `/carriot:new ABC-12` in a new agent window next to your others and brings the terminal forward. A session already running for that ticket is listed first, so enter goes back to it instead of starting a duplicate. The window is named after the ticket (`abc-12`); the agent renames it once it has read the ticket.
 
 ## Tickets and PRs
 

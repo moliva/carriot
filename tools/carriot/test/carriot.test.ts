@@ -667,16 +667,8 @@ describe("alfred workflow", () => {
     const items = alfred.sessionItems([entry()], "ABC-12");
     expect(items.map((i) => i.arg)).toEqual(["session:id-1", "new:ABC-12"]);
     expect(alfred.sessionItems([entry()], "nothing-like-it")[0].valid).toBe(false);
-  });
-
-  test("a new session reads the clipboard when nothing is typed, and lists a running one first", async () => {
-    db.putTicket({ id: "ABC-12", title: "Route drift alerts", status: null, url: null });
-    const items = await alfred.newItems([entry()], "", () => "https://linear.app/acme/issue/ABC-12/x");
-    expect(items.map((i) => i.arg)).toEqual(["session:id-1", "new:ABC-12"]);
-    expect(items[1].subtitle).toContain("from the clipboard");
-    const none = await alfred.newItems([], "", () => "just some text");
-    expect(none).toHaveLength(1);
-    expect(none[0].valid).toBe(false);
+    const pasted = alfred.sessionItems([], "https://linear.app/acme/issue/ABC-99/some-slug");
+    expect(pasted.map((i) => i.arg)).toEqual(["new:ABC-99"]);
   });
 
   test("the action ignores anything it does not know", () => {
