@@ -526,7 +526,7 @@ async function main() {
         case "sessions":
           return items(a.sessionItems(a.loadEntries(), args.join(" ")));
         case "go": {
-          const message = a.go(args.join(" "), CARRIOT_ROOT);
+          const message = a.go(args.join(" "), CARRIOT_ROOT, self());
           if (message) console.log(message);
           return;
         }

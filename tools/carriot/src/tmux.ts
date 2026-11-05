@@ -220,10 +220,13 @@ export function jump(pane: string, focusTerminal: boolean) {
   tmux("switch-client", "-t", pane);
   tmux("select-window", "-t", pane);
   tmux("select-pane", "-t", pane);
-  if (focusTerminal) {
-    const app = process.env.CARRIOT_TERMINAL_APP ?? "WezTerm";
-    Bun.spawnSync(["osascript", "-e", `tell application "${app}" to activate`], { stdout: "ignore", stderr: "ignore" });
-  }
+  if (focusTerminal) activateTerminal();
+}
+
+/** Brings the terminal app forward, for jumps that start outside it (Alfred, the dashboard, notifications). */
+export function activateTerminal() {
+  const app = process.env.CARRIOT_TERMINAL_APP ?? "WezTerm";
+  Bun.spawnSync(["osascript", "-e", `tell application "${app}" to activate`], { stdout: "ignore", stderr: "ignore" });
 }
 
 /** Recent pane text; `escapes` keeps the SGR colour/attribute sequences tmux otherwise strips. */

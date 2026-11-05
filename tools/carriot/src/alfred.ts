@@ -11,7 +11,7 @@ import { linearLinks, prBadge, prRef, repoName, type PrStatus } from "./work";
 export interface AlfredItem {
   title: string;
   subtitle?: string;
-  /** What the workflow's action receives: `session:<id>`, `new:<TICKET>` or `open:<url>`. */
+  /** What the workflow's action receives: `session:<id>`, `reins:`, `new:<TICKET>` or `open:<url>`. */
   arg?: string;
   valid?: boolean;
   mods?: Record<string, { arg?: string; subtitle?: string; valid?: boolean }>;
@@ -137,9 +137,24 @@ function newItem(ticket: string, title: string | null, note: string): AlfredItem
   };
 }
 
-/** The list: sessions matching the query; a typed ticket id or Linear link also offers a new session, after the matches (a running session for that ticket comes first, so enter goes back to it). */
+/** The pinned row that opens reins; it stays out of the way once you search for something else. */
+function reinsItem(entries: Entry[]): AlfredItem {
+  const waiting = entries.filter((e) => e.s.state !== "ended" && needsYou(e.s)).length;
+  return {
+    title: "🏇 Reins",
+    subtitle: waiting ? `${waiting} session${waiting === 1 ? "" : "s"} waiting on you · overview of every session` : "Overview of every session",
+    arg: "reins:",
+  };
+}
+
+/**
+ * The list: reins first (when the query is empty or looks for it), then the sessions matching the query. A typed
+ * ticket id or Linear link also offers a new session after the matches; a session already running for that ticket
+ * comes first, so enter goes back to it.
+ */
 export function sessionItems(entries: Entry[], query: string): AlfredItem[] {
   const items = search(entries, query).map(toItem);
+  if (!query.trim() || fuzzyScore(query, "reins overview dashboard") !== null) items.unshift(reinsItem(entries));
   const t = parseTicket(query);
   if (t) items.push(newItem(t.id, db.getTicket(t.id)?.title ?? null, "opens a new agent running /carriot:new"));
   return items.length ? items : [{ title: "No session matches", subtitle: "Search by name, ticket, PR number, repo or branch", valid: false }];
@@ -170,12 +185,22 @@ function startSession(ticket: string, hub: string): string {
   return `started ${ticket}`;
 }
 
+/** Switches to the reins session (starting it when needed) and brings the terminal forward. */
+function openReins(bin: string): string {
+  db.putSetting("reins_entered", String(Date.now()));
+  tmux.toggleReins(`${bin} reins`);
+  tmux.activateTerminal();
+  return "";
+}
+
 /** The workflow's action: runs what a list item's `arg` says and returns a line for the notification (empty for none). */
-export function go(arg: string, hub: string): string {
+export function go(arg: string, hub: string, bin = "carriot"): string {
   const at = arg.indexOf(":");
   const kind = at < 0 ? arg : arg.slice(0, at);
   const value = at < 0 ? "" : arg.slice(at + 1);
   switch (kind) {
+    case "reins":
+      return openReins(bin);
     case "session":
       return openSession(value);
     case "new": {

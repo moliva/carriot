@@ -671,6 +671,15 @@ describe("alfred workflow", () => {
     expect(pasted.map((i) => i.arg)).toEqual(["new:ABC-99"]);
   });
 
+  test("reins is pinned first when the list is empty or looks for it, and counts who waits on you", () => {
+    const waiting = entry({ s: session({ state: "needs_approval" }) });
+    const all = alfred.sessionItems([entry(), waiting], "");
+    expect(all[0]).toMatchObject({ title: "🏇 Reins", arg: "reins:" });
+    expect(all[0].subtitle).toContain("1 session waiting on you");
+    expect(alfred.sessionItems([entry()], "rei")[0].arg).toBe("reins:");
+    expect(alfred.sessionItems([entry()], "drift").map((i) => i.arg)).toEqual(["session:id-1"]);
+  });
+
   test("the action ignores anything it does not know", () => {
     expect(alfred.go("open:file:///etc/passwd", "/hub")).toBe("");
     expect(alfred.go("whatever", "/hub")).toBe("");
