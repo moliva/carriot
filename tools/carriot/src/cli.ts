@@ -30,6 +30,9 @@ const CHEATSHEET = (c: typeof C) => `${c.bold}CARRIOT CHEATSHEET${c.reset}  ${c.
 ${c.bold}TICKETS AND PRS${c.reset}  each session shows its ticket and PR (#123 ✓/…/✗ CI, changes/approved); the watcher checks
   every 2 min and turns a session red when CI fails, changes are requested or new comments land (your next prompt clears it)
 
+${c.bold}ALFRED${c.reset}  carriot alfred install, then cs: jump to a session (⌘ PR, ⌥ ticket, ⌃ dashboard), open reins, or paste a
+  ticket (ABC-12 / Linear link) to start a session on it, or a PR (repo#123 / link) to start a /review-pr session
+
 ${c.bold}NOTIFICATIONS${c.reset}  when a session starts needing you and you are not looking at it; click jumps there
   CARRIOT_NOTIFY=blocked skips "your turn", =off silences them
 
@@ -536,7 +539,7 @@ async function main() {
           return console.log(`built ${path}; Alfred offers to import it (cs lists sessions and starts one on a ticket)`);
         }
         default:
-          return notify("usage: carriot alfred install", true);
+          return notify("usage: carriot alfred sessions [query] | go <arg> | install [--no-open]", true);
       }
     }
     case "writeup": {

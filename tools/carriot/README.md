@@ -32,13 +32,43 @@ Agents without an adapter can push states directly: `carriot emit --agent pi --s
 
 ## Alfred workflow
 
-`carriot alfred install` zips `alfred/info.plist` into `~/.local/state/carriot/Carriot.alfredworkflow` and opens it; Alfred asks once whether to import. The workflow only calls `~/carriot/bin/carriot alfred …`, so changes to the lists or actions need no re-import (only a changed `info.plist` does).
+One Alfred keyword, **`cs`**, to find a session and jump to it, open reins, or start a session on a ticket or a PR review, without touching the terminal first.
 
-**`cs [query]`** lists sessions. The first row is **Reins** (with how many sessions wait on you): enter switches to the reins session, starting it if needed, and brings the terminal forward, so `cs` then enter is the quickest way in; it stays on top for an empty query or one like `rein`. Below it come running sessions in reins order, then the ones that ended in the last week. The search covers the name, ticket id and title, PR number (`123`, `api#123`) and title, repo, branch and the latest prompt; PR links in a session's latest messages count too. Enter jumps to the session (unparking it, or resuming it when it ended); ⌘ opens its PR, ⌥ its Linear ticket, ⌃ the dashboard (needs Carriot.app; on the Reins row it opens the dashboard itself).
+**Install:** `carriot alfred install` builds `Carriot.alfredworkflow` into `~/.local/state/carriot/` and opens it; Alfred asks whether to import it (it needs Alfred's Powerpack). Remove an older copy first so the old keyword doesn't linger. It expects carriot at `~/carriot` (`~/carriot/bin/carriot`). Everything the workflow does lives in `src/alfred.ts`, so changes to the list or its actions take effect as soon as they are on the checked-out branch; only a changed `alfred/info.plist` needs a re-import.
 
-Pasting a PR link or typing `repo#123` (or `owner/repo#123`) adds "Review repo#123" after the matches: it runs `/review-pr <what you pasted>` in a new agent window named `review-repo-123`, and a session already on that PR is listed first.
+**What `cs` shows:**
 
-Typing a ticket id (`ABC-12`) or pasting a Linear link adds "Start a session for ABC-12" after the matches. It runs `/carriot:new ABC-12` in a new agent window next to your others and brings the terminal forward. A session already running for that ticket is listed first, so enter goes back to it instead of starting a duplicate. The window is named after the ticket (`abc-12`); the agent renames it once it has read the ticket.
+| You type | The list |
+|---|---|
+| nothing | **Reins** (with how many sessions wait on you), then running sessions in reins order (needs you first), then the ones that ended in the last week |
+| a word or two (`drift`, `abc-12`, `321`, `api#321`) | the sessions that match, best first; `rein` keeps Reins on top |
+| a Linear link or ticket id (`ABC-12`) | sessions on that ticket, then **Start a session for ABC-12** |
+| a PR link or `repo#123` / `owner/repo#123` | sessions on that PR, then **Review repo#123** |
+
+The search covers the session name, ticket id and title, PR number (`123`, `api#123`) and title, repo, branch, working folder and latest prompt; PR links in a session's latest messages count too. Words are fuzzy-matched on names and ids, and matched as plain text in titles and prompts, the same as `/` in reins.
+
+Each session row shows a state dot (🔴 needs you, 🟡 your turn, 🟢 working, 🔵 planning, ⚪️ idle, ⚫️ ended), its name, and below it the state and age, the ticket and its title, and the PR badge.
+
+**Actions:**
+
+| Key | On a session | On Reins | On Start / Review |
+|---|---|---|---|
+| enter | jump to it: unparks it, attaches a background session, resumes an ended one, and brings the terminal forward | switch to the reins session (started if needed), with its daily brief as with `prefix T` | start a new agent in the hub and bring it forward |
+| ⌘ | open its PR on GitHub | | |
+| ⌥ | open its Linear ticket | | |
+| ⌃ | open it in the dashboard app (`carriot://focus/<id>`, needs Carriot.app) | open the dashboard app | |
+
+⌘ and ⌥ do nothing when the session has no PR or no known ticket link, and their subtitles say so.
+
+**Starting sessions.** *Start a session for ABC-12* runs `/carriot:new ABC-12`; *Review repo#123* runs `/review-pr <what you pasted>`. Both open a window next to your other sessions, named after the ticket (`abc-12`) or the PR (`review-repo-123`), in the hub with permission prompts skipped like `carriot new`, and bring the terminal forward. A session already on that ticket or PR is listed first, so enter goes back to it instead of starting a duplicate. With a short `repo#123` the new agent works out the owner; a pasted link needs no guessing.
+
+**Behind the scenes.** The workflow calls three subcommands, all usable from a shell:
+
+- `carriot alfred sessions [query]`: the list, as Alfred script-filter JSON.
+- `carriot alfred go <arg>`: the action (`session:<id>`, `reins:`, `new:<TICKET>`, `review:<PR>`, `open:<url>`); it prints a line for Alfred's notification (`started abc-12`, or what went wrong).
+- `carriot alfred install [--no-open]`: builds the package.
+
+The terminal brought forward is `CARRIOT_TERMINAL_APP` (default WezTerm). Ticket titles in the list come from Linear when a key is configured (see below). Jumping and starting need the tmux server running.
 
 ## Tickets and PRs
 
