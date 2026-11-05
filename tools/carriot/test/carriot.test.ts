@@ -613,3 +613,75 @@ describe("spawner note", () => {
     expect(out).toContain("BEPLAT-1/repo");
   });
 });
+
+describe("alfred workflow", () => {
+  const alfred = require("../src/alfred") as typeof import("../src/alfred");
+  const session = (over: Record<string, unknown> = {}) =>
+    ({ id: "id-1", agent: "claude", name: "drift-fix", title: null, cwd: "/hub/sessions/ABC-12/api", state: "waiting", mode: null, detail: null, last_prompt: null, last_message: null, started_at: 0, updated_at: Date.now(), state_since: Date.now() - 120_000, ended_at: null, bg: 0, end_reason: null, project_dir: null, tmux_server: null, tmux_target: "main:1", attention: null, attention_since: null, ...over }) as any;
+  const pr = { repo: "acme/api", number: 321, url: "https://github.com/acme/api/pull/321", title: "fix(drift): route alerts by owner", state: "OPEN", draft: false, checks: { failed: 0, pending: 0, passed: 3, total: 3 }, review: "APPROVED", activity: 0 } as any;
+  const entry = (over: Record<string, unknown> = {}) => ({
+    s: session(), ticket: "ABC-12", ticketTitle: "Route drift alerts", ticketStatus: "In Progress", ticketUrl: "https://linear.app/acme/issue/ABC-12", branch: "me/abc-12-drift", repo: "api", pr, mentioned: [], ...over,
+  });
+
+  test("a ticket is read from a Linear link or a bare id, nothing else", () => {
+    expect(alfred.parseTicket("https://linear.app/acme/issue/abc-12/some-slug")).toEqual({ id: "ABC-12", url: "https://linear.app/acme/issue/ABC-12" });
+    expect(alfred.parseTicket("  abc-12 \n")).toEqual({ id: "ABC-12", url: null });
+    expect(alfred.parseTicket("utf-8 is a charset")).toBeNull();
+    expect(alfred.parseTicket("")).toBeNull();
+  });
+
+  test("PR links in text become repo#number", () => {
+    expect(alfred.prMentions("see https://github.com/acme/api/pull/9 and https://github.com/acme/web/pull/10", null)).toEqual(["api#9", "web#10"]);
+  });
+
+  test("sessions are found by name, ticket, ticket title, PR number, PR title, repo and branch", () => {
+    const entries = [entry(), entry({ s: session({ id: "id-2", name: "other", cwd: "/hub/sessions/ZZ-1/web" }), ticket: "ZZ-1", ticketTitle: "Unrelated", branch: "me/zz-1", repo: "web", pr: null })];
+    for (const q of ["drift-fix", "abc-12", "ABC", "route drift", "321", "api#321", "owner", "web"]) {
+      const found = alfred.search(entries, q).map((e) => e.s.id);
+      expect(found).toContain(q === "web" ? "id-2" : "id-1");
+    }
+    expect(alfred.search(entries, "321").map((e) => e.s.id)).toEqual(["id-1"]);
+    expect(alfred.search(entries, "").length).toBe(2);
+  });
+
+  test("a row shows the state, ticket, PR and how to open them", () => {
+    const item = alfred.toItem(entry());
+    expect(item.title).toContain("drift-fix");
+    expect(item.subtitle).toContain("your turn");
+    expect(item.subtitle).toContain("ABC-12 Route drift alerts");
+    expect(item.subtitle).toContain("api#321");
+    expect(item.arg).toBe("session:id-1");
+    expect(item.mods?.cmd.arg).toBe("open:https://github.com/acme/api/pull/321");
+    expect(item.mods?.alt.arg).toBe("open:https://linear.app/acme/issue/ABC-12");
+  });
+
+  test("an ended session says it resumes; without a PR or ticket the mods are off", () => {
+    const item = alfred.toItem(entry({ s: session({ state: "ended", end_reason: "lost", ended_at: Date.now() - 3600_000 }), pr: null, ticket: null, ticketUrl: null }));
+    expect(item.subtitle).toContain("lost 1h ago");
+    expect(item.subtitle).toContain("enter resumes");
+    expect(item.mods?.cmd.valid).toBe(false);
+    expect(item.mods?.alt.valid).toBe(false);
+  });
+
+  test("typing a ticket offers a new session after the matches", () => {
+    const items = alfred.sessionItems([entry()], "ABC-12");
+    expect(items.map((i) => i.arg)).toEqual(["session:id-1", "new:ABC-12"]);
+    expect(alfred.sessionItems([entry()], "nothing-like-it")[0].valid).toBe(false);
+  });
+
+  test("a new session reads the clipboard when nothing is typed, and lists a running one first", async () => {
+    db.putTicket({ id: "ABC-12", title: "Route drift alerts", status: null, url: null });
+    const items = await alfred.newItems([entry()], "", () => "https://linear.app/acme/issue/ABC-12/x");
+    expect(items.map((i) => i.arg)).toEqual(["session:id-1", "new:ABC-12"]);
+    expect(items[1].subtitle).toContain("from the clipboard");
+    const none = await alfred.newItems([], "", () => "just some text");
+    expect(none).toHaveLength(1);
+    expect(none[0].valid).toBe(false);
+  });
+
+  test("the action ignores anything it does not know", () => {
+    expect(alfred.go("open:file:///etc/passwd", "/hub")).toBe("");
+    expect(alfred.go("whatever", "/hub")).toBe("");
+    expect(alfred.go("new:not a ticket", "/hub")).toContain("not a ticket");
+  });
+});

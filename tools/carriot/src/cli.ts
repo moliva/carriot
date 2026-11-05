@@ -518,6 +518,29 @@ async function main() {
       const path = installApp(process.env.CARRIOT_PORT ?? "7777");
       return console.log(`installed ${path}; carriot open (⌘⇧O) now opens it`);
     }
+    case "alfred": {
+      const a = await import("./alfred");
+      const [sub, ...args] = rest;
+      const items = (list: Awaited<ReturnType<typeof a.newItems>>) => console.log(JSON.stringify({ skipknowledge: true, items: list }));
+      switch (sub) {
+        case "sessions":
+          return items(a.sessionItems(a.loadEntries(), args.join(" ")));
+        case "new":
+          return items(await a.newItems(a.loadEntries(), args.join(" "), a.readClipboard));
+        case "go": {
+          const message = a.go(args.join(" "), CARRIOT_ROOT);
+          if (message) console.log(message);
+          return;
+        }
+        case "install": {
+          const path = a.buildWorkflow();
+          if (!args.includes("--no-open")) Bun.spawnSync(["open", path]);
+          return console.log(`built ${path}; Alfred offers to import it (cs lists sessions, cn starts one on a ticket)`);
+        }
+        default:
+          return notify("usage: carriot alfred install", true);
+      }
+    }
     case "writeup": {
       const { writeup } = await import("./scout");
       const i = rest.indexOf("--hours");
