@@ -676,6 +676,7 @@ describe("alfred workflow", () => {
     const all = alfred.sessionItems([entry(), waiting], "");
     expect(all[0]).toMatchObject({ title: "🏇 Reins", arg: "reins:" });
     expect(all[0].subtitle).toContain("1 session waiting on you");
+    expect(all[0].mods?.ctrl.arg).toBe("open:carriot://open");
     expect(alfred.sessionItems([entry()], "rei")[0].arg).toBe("reins:");
     expect(alfred.sessionItems([entry()], "drift").map((i) => i.arg)).toEqual(["session:id-1"]);
   });

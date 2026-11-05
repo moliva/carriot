@@ -168,6 +168,7 @@ function reinsItem(entries: Entry[]): AlfredItem {
     title: "🏇 Reins",
     subtitle: waiting ? `${waiting} session${waiting === 1 ? "" : "s"} waiting on you · overview of every session` : "Overview of every session",
     arg: "reins:",
+    mods: { ctrl: { arg: "open:carriot://open", subtitle: "Open the Carriot dashboard" } },
   };
 }
 
