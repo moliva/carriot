@@ -15,7 +15,7 @@ Only use the clones in `.base/`. Do **not** reference or interact with repos out
 
 ## Workflow
 
-When given a ticket:
+When given a ticket, **name the session first, every time**: set the tmux window name and the Claude session name to the same `<desc>` (see Tmux → Session description) before any other step.
 
 1. **Read the ticket** to understand the scope.
 2. **Diagnose which repos** need changes.
@@ -126,6 +126,7 @@ The statusline picks up the window name and surfaces it in dim yellow as the ses
 - If unsure what to call it, pick the best label you can from the user's request — don't ask.
 - The statusline filters common defaults (`main`, `master`, `zsh`, `bash`, `claude`, `node`), so nothing extra shows until you set a description.
 - If `$TMUX_PANE` is unset (Claude isn't running under tmux), skip the rename silently.
+- **Claude session name:** set it to the same `<desc>` with `/rename <desc>`. Agents cannot run slash commands, so when it isn't set, ask the user to run `/rename <desc>` themselves and don't treat the session as named until they do.
 
 ## Cleanup
 
