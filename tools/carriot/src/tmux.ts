@@ -105,6 +105,9 @@ export const PARK = process.env.CARRIOT_PARK_SESSION ?? "carriot-parked";
 /** Reins runs in its own tmux session, apart from the sessions agents live in. */
 export const REINS = process.env.CARRIOT_REINS_SESSION ?? "carriot-reins";
 
+/** The carriot session you work from: where the Alfred workflow puts the agents it starts. */
+export const HOME_SESSION = process.env.CARRIOT_HOME_SESSION ?? "carriot";
+
 /** carriot's own sessions: nothing an agent needs (new windows, unparked ones) is ever placed in them. */
 const OWN = new Set([PARK, REINS]);
 
@@ -254,22 +257,36 @@ export function sendText(pane: string, text: string, opts: { escapeFirst?: boole
 }
 
 /** Opens a window right after the current one (or in the first session outside tmux) and selects it. */
-export function newWindow(opts: { cwd?: string; name: string; command?: string; session?: string; detach?: boolean }): string | null {
+export function newWindow(opts: {
+  cwd?: string;
+  name: string;
+  command?: string;
+  session?: string;
+  /** Always open in this session, whichever pane started this; the session is created when it does not exist. */
+  pin?: string;
+  detach?: boolean;
+}): string | null {
   const pane = process.env.TMUX_PANE;
+  const cwd = opts.cwd ?? (pane ? tmux("display-message", "-p", "-t", pane, "#{pane_current_path}") : null);
+  const tail = [...(cwd ? ["-c", cwd] : []), ...(opts.command ? [opts.command] : [])];
+  // A pinned session that does not exist yet: create it, its first window being the new one.
+  if (opts.pin && tmux("has-session", "-t", `=${opts.pin}`) === null)
+    return tmux("new-session", "-d", "-s", opts.pin, "-n", opts.name, "-P", "-F", "#{pane_id}", ...tail);
   // Next to the current window, unless that is reins or the park; then in the session you came from.
   const own = pane ? OWN.has(tmux("display-message", "-p", "-t", pane, "#{session_name}") ?? "") : false;
   const window = pane && !own ? tmux("display-message", "-p", "-t", pane, "#{window_id}") : null;
   // Without a pane to sit next to (a tmux hook), go back to the session it came from.
   const home = opts.session && tmux("has-session", "-t", `=${opts.session}`) !== null ? opts.session : null;
-  const placement = window
-    ? ["-a", "-t", window]
-    : home && !pane
-      ? ["-d", "-t", `=${home}:`]
-      : ["-t", `=${currentSession() ?? home ?? fallbackSession() ?? ""}:`];
+  const placement = opts.pin
+    ? ["-t", `=${opts.pin}:`]
+    : window
+      ? ["-a", "-t", window]
+      : home && !pane
+        ? ["-d", "-t", `=${home}:`]
+        : ["-t", `=${currentSession() ?? home ?? fallbackSession() ?? ""}:`];
   // Detached: open it without switching the client away from the window you are in.
   if (opts.detach && !placement.includes("-d")) placement.unshift("-d");
-  const cwd = opts.cwd ?? (pane ? tmux("display-message", "-p", "-t", pane, "#{pane_current_path}") : null);
-  return tmux("new-window", "-P", "-F", "#{pane_id}", ...placement, "-n", opts.name, ...(cwd ? ["-c", cwd] : []), ...(opts.command ? [opts.command] : []));
+  return tmux("new-window", "-P", "-F", "#{pane_id}", ...placement, "-n", opts.name, ...tail);
 }
 
 /** Brief status-line message on the attached client (no output view to dismiss). */

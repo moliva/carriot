@@ -333,6 +333,8 @@ export function newAgent(opts: {
   skipPermissions?: boolean;
   /** Start it parked, without switching to it, e.g. when one agent spawns another for you to attach to later. */
   detach?: boolean;
+  /** tmux session to open the window in, whichever pane started this (see tmux.newWindow). */
+  pin?: string;
 }): { ok: boolean; message: string; pane?: string } {
   const claude = Bun.which("claude") ?? "claude";
   const flags = ["--model", AGENT_MODEL, ...(opts.skipPermissions === false ? [] : ["--dangerously-skip-permissions"])];
@@ -354,6 +356,7 @@ export function newAgent(opts: {
     cwd: opts.cwd,
     name: opts.name ?? "claude",
     detach: opts.detach,
+    pin: opts.pin,
     command: windowCommand([...flags, ...(brief ? [shellQuote(brief)] : [])], agentEnv()),
   });
   if (!pane) return { ok: false, message: "Could not open a tmux window (is tmux running?)." };

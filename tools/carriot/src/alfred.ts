@@ -206,9 +206,9 @@ function openSession(id: string): string {
   return r.message;
 }
 
-/** Starts an agent in the hub with `prompt`, in a window next to your other sessions, and brings it to the front. */
+/** Starts an agent in the hub with `prompt`, in the carriot tmux session, and brings it to the front. */
 function startSession(prompt: string, name: string, hub: string): string {
-  const r = core.newAgent({ prompt, cwd: hub, name, skipPermissions: true });
+  const r = core.newAgent({ prompt, cwd: hub, name, skipPermissions: true, pin: tmux.HOME_SESSION });
   if (!r.ok) return r.message;
   if (r.pane) tmux.jump(r.pane, true);
   return `started ${name}`;

@@ -60,7 +60,7 @@ Each session row shows a state dot (🔴 needs you, 🟡 your turn, 🟢 working
 
 ⌘ and ⌥ do nothing when the session has no PR or no known ticket link, and their subtitles say so.
 
-**Starting sessions.** *Start a session for ABC-12* runs `/carriot:new ABC-12`; *Review repo#123* runs `/review-pr <what you pasted>`. Both open a window next to your other sessions, named after the ticket (`abc-12`) or the PR (`review-repo-123`), in the hub with permission prompts skipped like `carriot new`, and bring the terminal forward. A session already on that ticket or PR is listed first, so enter goes back to it instead of starting a duplicate. With a short `repo#123` the new agent works out the owner; a pasted link needs no guessing.
+**Starting sessions.** *Start a session for ABC-12* runs `/carriot:new ABC-12`; *Review repo#123* runs `/review-pr <what you pasted>`. Both open a window in the `carriot` tmux session (`CARRIOT_HOME_SESSION` overrides the name), named after the ticket (`abc-12`) or the PR (`review-repo-123`), in the hub with permission prompts skipped like `carriot new`, and bring the terminal forward. If that session does not exist, it is created and the window goes in it. A session already on that ticket or PR is listed first, so enter goes back to it instead of starting a duplicate. With a short `repo#123` the new agent works out the owner; a pasted link needs no guessing.
 
 **Behind the scenes.** The workflow calls three subcommands, all usable from a shell:
 
