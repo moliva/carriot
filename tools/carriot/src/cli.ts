@@ -75,8 +75,8 @@ ${c.bold}REINS${c.reset}  ${c.dim}carriot reins${c.reset}
   a                 new agent window (type an optional first prompt, enter starts it)
   x                 close the selected session and its pane (y to confirm)
   o                 open in the web dashboard    q     quit
-  ?                 ask the scout about the selected session; tab switches to all sessions (searches ended ones too)
-  5                 scout tab: the answer, and what a waiting session needs from you
+  ?                 send a question to the scout pane about the selected session (opens it and focuses it); tab switches to all sessions
+  5                 scout tab: what a waiting session needs from you
   b                 report panel: daily brief (waiting on you, changes since your last visit), write-up, cross-session answers
   w                 write-up of the last 24h for your team (copied to the clipboard; also carriot writeup)
   S                 scout pane for follow-up questions; c closes it (or prefix X / /exit inside it)

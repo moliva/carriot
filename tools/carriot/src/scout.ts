@@ -279,3 +279,22 @@ export function closePane(pane: string): string {
   if (!existing) return "The scout pane is not open.";
   return tmux.killPane(existing) ? "Scout pane closed." : "Could not close the scout pane.";
 }
+
+/**
+ * Sends a question to the scout pane beside `pane` (reins) and focuses it. Open, the question is submitted there; not
+ * open, the pane starts with the question as its first prompt, since keys typed into a scout that is still booting
+ * would be dropped.
+ */
+export function ask(pane: string, question: string, s: SessionRow | null): string {
+  const text = s ? `About ${core.displayName(s)} (${s.id}): ${question}` : `About all sessions: ${question}`;
+  const existing = tmux.scoutPane(pane);
+  if (existing) {
+    if (!tmux.focusPane(existing)) return "Could not reach the scout pane.";
+    return tmux.sendText(existing, text) ? "Sent to the scout." : "Could not send to the scout.";
+  }
+  const command = [...base().map(quote), quote(text)].join(" ");
+  const started = tmux.splitScout(pane, { cwd: DIR, command, size: process.env.CARRIOT_SCOUT_WIDTH ?? "40%" });
+  if (!started) return "Could not start the scout.";
+  tmux.focusPane(started);
+  return "Scout starting with your question.";
+}

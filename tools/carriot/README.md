@@ -13,7 +13,7 @@ Agent hooks call `bin/carriot hook <agent>`. An adapter (`src/adapters/<agent>.t
   - **Scout**: a cheap model (`CARRIOT_SCOUT_MODEL`, default `deepseek/deepseek-v4.1-flash`) that reads the other sessions for you, read-only.
     - Every session that waits on you gets a one-line *needs from you* ("Approve splitting the ticket…") in its row and overview, written when it enters that state.
     - The first time you open reins each day (or return after 15 minutes or more, `CARRIOT_BRIEF_AFTER_MINUTES`) it opens a daily brief in the report panel: what is waiting on you, what changed since you last had reins open (so after a night, a weekend or time off it covers everything since), and what is still open even if nothing touched it meanwhile. `b` shows or hides the panel (with nothing in it yet, it briefs since your last visit), esc closes it.
-    - `?` asks about the selected session; the answer lands in tab 5, *scout*. Tab in the question box switches to all sessions, live and ended: the answer opens in the report panel and the first session it names is selected, so enter jumps to it or resumes it.
+    - `?` sends a question to the scout pane about the selected session: the pane opens and takes focus if it is not already there, otherwise the question is submitted in it and the pane takes focus. Tab in the question box asks about all sessions instead.
     - `w` writes up the last 24 hours for your team (TL;DR, then done / in progress / blocked, no ticket IDs) and copies it to the clipboard; `carriot writeup [--hours N]` prints it.
     - `S` opens the scout as a pane beside reins for follow-up questions, pre-filling the selected session; `c` closes it, as do `prefix X` and `/exit` inside it. The first start asks you to trust its folder once.
 

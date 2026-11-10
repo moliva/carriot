@@ -279,35 +279,13 @@ function startReport(job: Promise<scout.Report | null>, done?: (r: scout.Report)
   track("report", job, (r) => (r ? done?.(r) : say("The scout came back empty.")));
 }
 
-/** Selects the first session a cross-session answer names, showing a week of ended ones if it ended. */
-function selectFound(r: scout.Report) {
-  const id = r.ids?.[0];
-  if (!id) return;
-  if (!allRows().some((s) => s.id === id) && db.getSession(id)?.state === "ended" && !showWeekOfEnded) {
-    showWeekOfEnded = true;
-    refresh(true);
-  }
-  if (!allRows().some((s) => s.id === id)) return;
-  filter = null;
-  select(id);
-  const s = selected();
-  say(`Selected ${s ? core.displayName(s) : id}; enter ${s && ended(s) ? "resumes" : "jumps to"} it.`);
-}
-
+/** Hands the question to the scout pane (opened and focused if need be), about the selected session or all of them. */
 function ask(text: string, all: boolean) {
   const s = all ? null : selected();
   if (!all && !s) return;
-  if (all)
-    return startReport(
-      scout.answer(text, null).then((a) => (a ? scout.lastReport() : null)),
-      selectFound,
-    );
-  tab = "scout";
-  tabPinned = true;
-  scroll = 0;
-  track(`answer:${s!.id}`, scout.answer(text, s), (a) => {
-    if (!a) say("The scout came back empty.");
-  });
+  const pane = process.env.TMUX_PANE;
+  if (!pane) return say("The scout needs reins to run in tmux.");
+  say(scout.ask(pane, text, s));
 }
 
 function copy(text: string): boolean {
@@ -589,7 +567,7 @@ function footer(width: number): string {
   if (asking !== null) {
     const s = selected();
     const about = asking.all ? "about all sessions" : `about ${s ? core.displayName(s) : "?"}`;
-    return fit(`${A.inverse} scout ${A.reset} ${A.grey}${about}:${A.reset} ${asking.text}${A.inverse} ${A.reset}  ${A.grey}enter ask · tab ${asking.all ? "this session" : "all sessions"} · esc cancel${A.reset}`, width);
+    return fit(`${A.inverse} scout ${A.reset} ${A.grey}${about}:${A.reset} ${asking.text}${A.inverse} ${A.reset}  ${A.grey}enter sends it to the scout pane · tab ${asking.all ? "this session" : "all sessions"} · esc cancel${A.reset}`, width);
   }
   if (replying !== null) {
     const s = selected();
