@@ -58,12 +58,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
   }
 
   /// Runs `carriot jump <session>`, which unparks it, switches tmux to its window and brings the terminal forward.
+  /// A cold start shows the dashboard, so once the jump succeeds Carriot hides itself and the terminal keeps focus.
   private func jump(_ id: String?) {
     let safe = (id ?? "").filter { $0.isLetter || $0.isNumber || $0 == "-" }
     guard !safe.isEmpty else { return }
+    selectInDashboard(safe)
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/sh")
     process.arguments = ["-c", "\"$0\" jump \"$1\"", carriot, safe]
+    process.terminationHandler = { finished in
+      guard finished.terminationStatus == 0 else { return }
+      DispatchQueue.main.async { NSApp.hide(nil) }
+    }
     try? process.run()
   }
 
@@ -77,6 +83,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     guard let id else { return }
     let safe = id.filter { $0.isLetter || $0.isNumber || $0 == "-" }
     guard !safe.isEmpty else { return }
+    selectInDashboard(safe)
+  }
+
+  /// Opens the dashboard on a session's row now, or as soon as the page loads.
+  private func selectInDashboard(_ safe: String) {
     if loaded, let web {
       web.evaluateJavaScript("location.hash = '\(safe)'")
     } else {
