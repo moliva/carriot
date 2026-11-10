@@ -55,6 +55,11 @@ When the user asks you to start, spawn or open a session for some work (typicall
 - `<desc>` is a 1–3 word hyphenated label, the same as a window name (see Tmux below).
 - `<prompt>` is the new session's first message, and that session starts with no context. For a ticket, use `/carriot:new <TICKET-ID>` followed by anything from this conversation it needs (decisions, scope, which repos). For other work, write a self-contained brief.
 - Start one session per piece of work. Then tell the user what you started and that they can reach it from reins (`prefix T`) or with `carriot jump <name>`.
+- **Always give the user a clickable link in the same reply that reports the spawn**, never as a follow-up. `carriot new` does not print the session id, so look it up right after spawning (`ls` writes to the carriot database, which the sandbox blocks, so run it with `dangerouslyDisableSandbox: true`):
+  ```sh
+  ~/carriot/bin/carriot ls --json | python3 -c 'import json,sys; [print(s["id"]) for s in json.load(sys.stdin) if s.get("name") == "<desc>"]'
+  ```
+  Present it as a Markdown link whose text is the session name and whose target is `carriot://jump/<id>`, e.g. `[kyverno-oom-fix](carriot://jump/<id>)`, so the URL stays hidden. `jump` unparks the session and switches tmux to it. Mention `carriot://focus/<id>` (dashboard only) as the alternative in the text, not as a second link. Both need Carriot.app installed. With several sessions spawned, give one link per session.
 - Add `--bg` to start a Claude background session instead of a tmux window, if the user asks for that.
 
 ## Review Sessions

@@ -1,2 +1,3 @@
 .base/*/
 sessions/*/
+.DS_Store
