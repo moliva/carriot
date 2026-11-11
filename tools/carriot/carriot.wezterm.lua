@@ -8,10 +8,47 @@ local M = {}
 
 local path = os.getenv("HOME") .. "/carriot/tools/carriot/carriot.wezterm.lua"
 
+-- Local, untracked rules: a list of { prefix = "https://...", profile = "Profile N" }, where profile is the
+-- Chrome profile directory name. Read on every click, so edits apply without reloading WezTerm.
+local profiles_path = os.getenv("HOME") .. "/.config/carriot/chrome-profiles.lua"
+
+---@param uri string the clicked link
+---@param rules table the { prefix, profile } rules, first match wins
+---@return string|nil profile the Chrome profile directory for the link, or nil when no rule matches
+function M.chrome_profile_for(uri, rules)
+  for _, rule in ipairs(rules) do
+    if rule.prefix and rule.prefix ~= "" and uri:sub(1, #rule.prefix) == rule.prefix then
+      return rule.profile
+    end
+  end
+  return nil
+end
+
+local function load_rules()
+  local ok, rules = pcall(dofile, profiles_path)
+  if ok and type(rules) == "table" then
+    return rules
+  end
+  return {}
+end
+
 ---@param config table the wezterm config table
 ---@param keys table the dotfiles keys helper (provides tmux_prefixed_key)
 function M.apply(config, keys)
   wezterm.add_to_config_reload_watch_list(path)
+
+  -- Links matching a rule open in that Chrome profile; everything else keeps WezTerm's default opener.
+  wezterm.on("open-uri", function(_, _, uri)
+    local profile = M.chrome_profile_for(uri, load_rules())
+    if not profile then
+      return
+    end
+    wezterm.background_child_process({
+      "open", "-na", "Google Chrome", "--args", "--profile-directory=" .. profile, uri,
+    })
+    return false
+  end)
+
   local bindings = {
     -- new agent window (claude --dangerously-skip-permissions), next to CMD+t for a plain window
     { mods = "CMD|SHIFT", key = "t", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "a" }) },

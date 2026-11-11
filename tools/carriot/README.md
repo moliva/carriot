@@ -139,6 +139,10 @@ local carriot_ok, carriot = pcall(dofile, os.getenv("HOME") .. "/carriot/tools/c
 if carriot_ok then carriot.apply(config, keys) end
 ```
 
+Chrome profile for links: clicking a link in WezTerm opens it in the Chrome profile named by the first matching rule in `~/.config/carriot/chrome-profiles.lua`, which stays out of the repo. Each rule is `{ prefix = "https://...", profile = "<directory>" }`, where `profile` is the directory under `~/Library/Application Support/Google/Chrome/` (`Default`, `Profile 2`, …). The file is read on every click, so edits apply without reloading WezTerm. Links that match no rule, including `carriot://`, keep WezTerm's default opener.
+
+The rule's prefix is read from `CARRIOT_CHROME_PROFILE_PREFIX`, so the URL prefix stays out of the file too. Unset, the rule is skipped. WezTerm only sees the environment it was launched with: a WezTerm started from the Dock needs `launchctl setenv CARRIOT_CHROME_PROFILE_PREFIX <prefix>` (or a relaunch after setting it in a shell), and a restart picks up a change.
+
 New sessions: `carriot new [prompt]` (or `prefix A`, `a` in reins) opens a tmux window next to the current one running `claude --dangerously-skip-permissions` from the carriot root, so the hooks apply. `--bg` starts a background session instead, `--here` uses the current directory, `--safe` keeps permission prompts. `-d` / `--detach` opens the window without switching to it and prints the result. Agents use it to spawn a session for you to attach to later: the hub `CLAUDE.md` tells a management session to run `carriot new -d --name <desc> '/carriot:new <TICKET>'` instead of doing the work itself.
 
 Optional: `brew install glow git-delta` for nicer plan and diff rendering in the terminal.
