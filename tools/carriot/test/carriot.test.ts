@@ -666,7 +666,6 @@ describe("alfred workflow", () => {
   test("typing a ticket offers a new session after the matches", () => {
     const items = alfred.sessionItems([entry()], "ABC-12");
     expect(items.map((i) => i.arg)).toEqual(["session:id-1", "new:ABC-12"]);
-    expect(alfred.sessionItems([entry()], "nothing-like-it")[0].valid).toBe(false);
     const pasted = alfred.sessionItems([], "https://linear.app/acme/issue/ABC-99/some-slug");
     expect(pasted.map((i) => i.arg)).toEqual(["new:ABC-99"]);
   });
@@ -678,7 +677,22 @@ describe("alfred workflow", () => {
     expect(all[0].subtitle).toContain("1 session waiting on you");
     expect(all[0].mods?.ctrl.arg).toBe("open:carriot://open");
     expect(alfred.sessionItems([entry()], "rei")[0].arg).toBe("reins:");
-    expect(alfred.sessionItems([entry()], "drift").map((i) => i.arg)).toEqual(["session:id-1"]);
+    expect(alfred.sessionItems([entry()], "drift").map((i) => i.arg)).toEqual(["session:id-1", "scratch:drift"]);
+  });
+
+  test("any other text offers an empty session named after it, last; a ticket or PR does not", () => {
+    expect(alfred.sessionItems([entry()], "nothing-like-it").map((i) => i.arg)).toEqual(["scratch:nothing-like-it"]);
+    expect(alfred.sessionItems([], "a-new-session-name")).toEqual([
+      { title: "Start a session named a-new-session-name", subtitle: "an empty agent in the carriot hub, no prompt yet", arg: "scratch:a-new-session-name" },
+    ]);
+    expect(alfred.sessionItems([], "!!!").map((i) => i.valid)).toEqual([false]);
+  });
+
+  test("a session name is lowercase words joined by hyphens", () => {
+    expect(alfred.sessionName("a-new-session-name")).toBe("a-new-session-name");
+    expect(alfred.sessionName("  Fix the Thing!  ")).toBe("fix-the-thing");
+    expect(alfred.sessionName("api/v2_cleanup")).toBe("api-v2-cleanup");
+    expect(alfred.sessionName("--- ")).toBeNull();
   });
 
   test("a PR is read from a pull request link or a repo#number, nothing else", () => {
@@ -703,5 +717,6 @@ describe("alfred workflow", () => {
     expect(alfred.go("whatever", "/hub")).toBe("");
     expect(alfred.go("new:not a ticket", "/hub")).toContain("not a ticket");
     expect(alfred.go("review:not a pr", "/hub")).toContain("not a PR");
+    expect(alfred.go("scratch:---", "/hub")).toContain("not a session name");
   });
 });

@@ -31,7 +31,8 @@ ${c.bold}TICKETS AND PRS${c.reset}  each session shows its ticket and PR (#123 �
   every 2 min and turns a session red when CI fails, changes are requested or new comments land (your next prompt clears it)
 
 ${c.bold}ALFRED${c.reset}  carriot alfred install, then cs: jump to a session (⌘ PR, ⌥ ticket, ⌃ dashboard), open reins, or paste a
-  ticket (ABC-12 / Linear link) to start a session on it, or a PR (repo#123 / link) to start a /review-pr session
+  ticket (ABC-12 / Linear link) to start a session on it, a PR (repo#123 / link) to start a /review-pr session, or any
+  other new name to start an empty session with that name
 
 ${c.bold}NOTIFICATIONS${c.reset}  when a session starts needing you and you are not looking at it; click jumps there
   CARRIOT_NOTIFY=blocked skips "your turn", =off silences them

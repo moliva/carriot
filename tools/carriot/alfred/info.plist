@@ -79,7 +79,7 @@
 				<key>scriptfile</key>
 				<string></string>
 				<key>subtext</key>
-				<string>Name, ticket, PR number, repo or branch; a ticket id or link starts a session. ⌘ PR, ⌥ ticket, ⌃ dashboard.</string>
+				<string>Name, ticket, PR number, repo or branch; a ticket id, PR or a new name starts a session. ⌘ PR, ⌥ ticket, ⌃ dashboard.</string>
 				<key>title</key>
 				<string>Carriot sessions</string>
 				<key>type</key>
@@ -143,6 +143,8 @@
 	<string>cs [query]: list carriot sessions (running first, then ended in the last week). Search by name, ticket id or title, PR number, repo or branch. Enter jumps to the session (resumes it if it ended); ⌘ opens its PR, ⌥ its Linear ticket, ⌃ the dashboard.
 
 Type a Linear ticket id (ABC-123) or paste a Linear link and the last row starts a new session on it. A session already running for that ticket is listed first.
+
+Type any other new name (a-new-session-name) and the last row starts an empty session with that name in the hub.
 
 Needs ~/carriot/bin/carriot. Rebuild with: carriot alfred install</string>
 	<key>uidata</key>

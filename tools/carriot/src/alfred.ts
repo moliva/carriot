@@ -11,7 +11,7 @@ import { linearLinks, prBadge, prRef, repoName, type PrStatus } from "./work";
 export interface AlfredItem {
   title: string;
   subtitle?: string;
-  /** What the workflow's action receives: `session:<id>`, `reins:`, `new:<TICKET>`, `review:<PR>` or `open:<url>`. */
+  /** What the workflow's action receives: `session:<id>`, `reins:`, `new:<TICKET>`, `review:<PR>`, `scratch:<name>` or `open:<url>`. */
   arg?: string;
   valid?: boolean;
   mods?: Record<string, { arg?: string; subtitle?: string; valid?: boolean }>;
@@ -161,6 +161,20 @@ function reviewItem(p: PrRef): AlfredItem {
   };
 }
 
+/** The name a typed query gives an empty session: lowercase words joined by hyphens; null when nothing is left. */
+export function sessionName(text: string): string | null {
+  const name = text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return name || null;
+}
+
+function scratchItem(name: string): AlfredItem {
+  return {
+    title: `Start a session named ${name}`,
+    subtitle: "an empty agent in the carriot hub, no prompt yet",
+    arg: `scratch:${name}`,
+  };
+}
+
 /** The pinned row that opens reins; it stays out of the way once you search for something else. */
 function reinsItem(entries: Entry[]): AlfredItem {
   const waiting = entries.filter((e) => e.s.state !== "ended" && needsYou(e.s)).length;
@@ -175,7 +189,8 @@ function reinsItem(entries: Entry[]): AlfredItem {
 /**
  * The list: reins first (when the query is empty or looks for it), then the sessions matching the query. A typed
  * ticket id or Linear link also offers a new session after the matches, and a PR reference or link offers a review
- * session; a session already running for that ticket or PR comes first, so enter goes back to it.
+ * session; a session already running for that ticket or PR comes first, so enter goes back to it. Any other text also
+ * offers an empty session named after it, last, so a name that matches nothing is one enter away.
  */
 export function sessionItems(entries: Entry[], query: string): AlfredItem[] {
   const t = parseTicket(query);
@@ -186,6 +201,8 @@ export function sessionItems(entries: Entry[], query: string): AlfredItem[] {
   if (!query.trim() || fuzzyScore(query, "reins overview dashboard") !== null) items.unshift(reinsItem(entries));
   if (t) items.push(newItem(t.id, db.getTicket(t.id)?.title ?? null, "opens a new agent running /carriot:new"));
   if (p) items.push(reviewItem(p));
+  const name = t || p ? null : sessionName(query);
+  if (name) items.push(scratchItem(name));
   return items.length ? items : [{ title: "No session matches", subtitle: "Search by name, ticket, PR number, repo or branch", valid: false }];
 }
 
@@ -239,6 +256,10 @@ export function go(arg: string, hub: string, bin = "carriot"): string {
     case "review": {
       const p = parsePr(value);
       return p ? startSession(`/review-pr ${p.ref}`, `review-${p.repo}-${p.number}`.toLowerCase(), hub) : `not a PR: ${value}`;
+    }
+    case "scratch": {
+      const name = sessionName(value);
+      return name ? startSession("", name, hub) : `not a session name: ${value}`;
     }
     case "open":
       if (!/^(https:\/\/|carriot:\/\/)/.test(value)) return "";

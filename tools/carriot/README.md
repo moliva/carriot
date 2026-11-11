@@ -44,6 +44,7 @@ One Alfred keyword, **`cs`**, to find a session and jump to it, open reins, or s
 | a word or two (`drift`, `abc-12`, `321`, `api#321`) | the sessions that match, best first; `rein` keeps Reins on top |
 | a Linear link or ticket id (`ABC-12`) | sessions on that ticket, then **Start a session for ABC-12** |
 | a PR link or `repo#123` / `owner/repo#123` | sessions on that PR, then **Review repo#123** |
+| any other text that is not one of the above (`a-new-session-name`) | the sessions that match, then **Start a session named a-new-session-name** |
 
 The search covers the session name, ticket id and title, PR number (`123`, `api#123`) and title, repo, branch, working folder and latest prompt; PR links in a session's latest messages count too. Words are fuzzy-matched on names and ids, and matched as plain text in titles and prompts, the same as `/` in reins.
 
@@ -53,7 +54,7 @@ Each session row shows a state dot (🔴 needs you, 🟡 your turn, 🟢 working
 
 | Key | On a session | On Reins | On Start / Review |
 |---|---|---|---|
-| enter | jump to it: unparks it, attaches a background session, resumes an ended one, and brings the terminal forward | switch to the reins session (started if needed), with its daily brief as with `prefix T` | start a new agent in the hub and bring it forward |
+| enter | jump to it: unparks it, attaches a background session, resumes an ended one, and brings the terminal forward | switch to the reins session (started if needed), with its daily brief as with `prefix T` | start a new agent in the hub and bring it forward (Review and Start for a ticket run a prompt; Start named has none) |
 | ⌘ | open its PR on GitHub | | |
 | ⌥ | open its Linear ticket | | |
 | ⌃ | open it in the dashboard app (`carriot://focus/<id>`, needs Carriot.app) | open the dashboard app | |
@@ -62,10 +63,12 @@ Each session row shows a state dot (🔴 needs you, 🟡 your turn, 🟢 working
 
 **Starting sessions.** *Start a session for ABC-12* runs `/carriot:new ABC-12`; *Review repo#123* runs `/review-pr <what you pasted>`. Both open a window in the `carriot` tmux session (`CARRIOT_HOME_SESSION` overrides the name), named after the ticket (`abc-12`) or the PR (`review-repo-123`), in the hub with permission prompts skipped like `carriot new`, and bring the terminal forward. If that session does not exist, it is created and the window goes in it. A session already on that ticket or PR is listed first, so enter goes back to it instead of starting a duplicate. With a short `repo#123` the new agent works out the owner; a pasted link needs no guessing.
 
+*Start a session named a-new-session-name* starts an empty agent in the hub with no prompt, in a window named after the text (lowercased, with runs of other characters turned into hyphens). Use it for work that is not a ticket or a PR; it is the last row, so when some sessions match, arrow down to it.
+
 **Behind the scenes.** The workflow calls three subcommands, all usable from a shell:
 
 - `carriot alfred sessions [query]`: the list, as Alfred script-filter JSON.
-- `carriot alfred go <arg>`: the action (`session:<id>`, `reins:`, `new:<TICKET>`, `review:<PR>`, `open:<url>`); it prints a line for Alfred's notification (`started abc-12`, or what went wrong).
+- `carriot alfred go <arg>`: the action (`session:<id>`, `reins:`, `new:<TICKET>`, `review:<PR>`, `scratch:<name>`, `open:<url>`); it prints a line for Alfred's notification (`started abc-12`, or what went wrong).
 - `carriot alfred install [--no-open]`: builds the package.
 
 The terminal brought forward is `CARRIOT_TERMINAL_APP` (default WezTerm). Ticket titles in the list come from Linear when a key is configured (see below). Jumping and starting need the tmux server running.
