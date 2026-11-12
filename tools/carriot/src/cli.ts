@@ -206,8 +206,10 @@ function row(s: SessionRow, width = 40): string {
   const padded = `${name}${" ".repeat(Math.max(0, pad))}`;
   const st = label(s).padEnd(14);
   const age = core.ago(isStale(s) ? s.updated_at : s.state_since).padStart(4);
-  const detail = (s.detail ?? "").replace(/\s+/g, " ").slice(0, width);
-  return `${color(s)}●${C.reset} ${C.bold}${padded}${C.reset} ${color(s)}${st}${C.reset} ${C.dim}${age}${C.reset}  ${detail}`;
+  // The ticket and PR reference sit before the detail so fzf (which searches only the displayed row) can match them.
+  const refs = core.workRefs(s).join(" ");
+  const detail = (s.detail ?? "").replace(/\s+/g, " ").slice(0, refs ? Math.max(10, width - refs.length - 2) : width);
+  return `${color(s)}●${C.reset} ${C.bold}${padded}${C.reset} ${color(s)}${st}${C.reset} ${C.dim}${age}${C.reset}  ${refs ? `${C.dim}${refs}${C.reset}  ` : ""}${detail}`;
 }
 
 async function preview(s: SessionRow) {

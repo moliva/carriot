@@ -2,7 +2,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as db from "./db";
 import * as notify from "./notify";
-import { ticketUrl } from "./work";
+import { prRef, ticketUrl, type PrStatus } from "./work";
 import * as tmux from "./tmux";
 import { isStale, needsYou, urgency, type AdapterResult, type AgentEvent, type SessionRow } from "./types";
 
@@ -281,6 +281,14 @@ export function displayName(s: SessionRow): string {
   const cwd = s.cwd ?? "";
   const m = cwd.match(/sessions\/([^/]+)(?:\/([^/]+))?/);
   return m ? [m[1], m[2]].filter(Boolean).join("/") : cwd.split("/").pop() || s.id.slice(0, 8);
+}
+
+/** The ticket id and PR reference (`api#321`) a session works on: what the picker shows and both searches match. */
+export function workRefs(s: SessionRow): string[] {
+  const w = db.getWork(s.id);
+  const pr: PrStatus | null = w?.pr ? JSON.parse(w.pr) : null;
+  if (pr && !pr.repo) pr.repo = w?.repo ?? null;
+  return [w?.ticket, pr && prRef(pr)].filter((x): x is string => !!x);
 }
 
 export function ago(ts: number): string {

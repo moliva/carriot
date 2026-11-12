@@ -720,3 +720,20 @@ describe("alfred workflow", () => {
     expect(alfred.go("scratch:---", "/hub")).toContain("not a session name");
   });
 });
+
+describe("picker and reins search refs", () => {
+  test("a session's ticket and repo#PR are its refs, and a PR-only session has just the PR", () => {
+    const pr = { repo: "acme/api", number: 321, url: "https://github.com/acme/api/pull/321", title: "t", state: "OPEN", draft: false, checks: { failed: 0, pending: 0, passed: 0, total: 0 }, review: null, activity: 0 };
+    db.putWork({ session_id: "refs-1", repo: "acme/api", branch: "me/abc-12", ticket: "ABC-12", pr: JSON.stringify(pr) });
+    db.putWork({ session_id: "refs-2", repo: "acme/api", branch: "me/x", ticket: null, pr: JSON.stringify({ ...pr, repo: null, number: 7 }) });
+    expect(core.workRefs({ id: "refs-1" } as any)).toEqual(["ABC-12", "api#321"]);
+    expect(core.workRefs({ id: "refs-2" } as any)).toEqual(["api#7"]);
+    expect(core.workRefs({ id: "no-work" } as any)).toEqual([]);
+  });
+
+  test("the reference as typed matches the refs text", () => {
+    const refs = core.workRefs({ id: "refs-1" } as any).join(" ");
+    for (const q of ["abc-12", "api#321", "321", "#321"]) expect(fuzzyScore(q, refs)).not.toBeNull();
+    expect(fuzzyScore("api#999", refs)).toBeNull();
+  });
+});

@@ -192,8 +192,7 @@ const selected = () => allRows().find((s) => s.id === selectedId) ?? null;
 
 /** Short identifying fields match fuzzily; status and reply text only match the words as typed. */
 function matchScore(s: SessionRow, query: string): number | null {
-  const work = workOf(s);
-  const names = [core.displayName(s), s.title, core.location(s), s.agent, s.tmux_target, s.cwd?.replace(/^\/Users\/[^/]+/, "~"), work.ticket, work.pr ? `#${work.pr.number}` : null]
+  const names = [core.displayName(s), s.title, core.location(s), s.agent, s.tmux_target, s.cwd?.replace(/^\/Users\/[^/]+/, "~"), ...core.workRefs(s)]
     .filter(Boolean)
     .join(" ");
   const text = [label(s), s.detail, s.last_prompt].filter(Boolean).join(" ");
