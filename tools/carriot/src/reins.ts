@@ -859,6 +859,8 @@ let timers: ReturnType<typeof setInterval>[] = [];
 
 function quit() {
   for (const t of timers) clearInterval(t);
+  const pane = process.env.TMUX_PANE;
+  if (pane) scout.closePane(pane);
   out.write(`${ESC}?25h${ESC}?1049l`);
   process.stdin.setRawMode?.(false);
   process.exit(0);

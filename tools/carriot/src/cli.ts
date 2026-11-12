@@ -80,7 +80,7 @@ ${c.bold}REINS${c.reset}  ${c.dim}carriot reins${c.reset}
   5                 scout tab: what a waiting session needs from you
   b                 report panel: daily brief (waiting on you, changes since your last visit), write-up, cross-session answers
   w                 write-up of the last 24h for your team (copied to the clipboard; also carriot writeup)
-  S                 scout pane for follow-up questions; c closes it (or prefix X / /exit inside it)
+  S                 scout pane for follow-up questions; c closes it (or prefix X / /exit inside it), and quitting reins closes it too
 
 ${c.bold}PICKER POPUP${c.reset}  ${c.dim}carriot pick${c.reset}
   type to filter    enter jump    ctrl-p plan    ctrl-r PR preview
