@@ -1,4 +1,4 @@
-import { nextCategory } from "./category";
+import { groupByCategory, nextCategory, nextFilter, type Category } from "./category";
 import * as core from "./core";
 import * as db from "./db";
 import { fuzzyScore } from "./fuzzy";
@@ -177,6 +177,17 @@ let endedRows: SessionRow[] = [];
 let showWeekOfEnded = false;
 /** Active `/` filter query; null when not filtering. */
 let filter: string | null = null;
+/** How the list is grouped: by state (needs you, your turn, …) or by category (dev, review, …); `v` toggles and it is remembered. */
+let grouping: "state" | "category" = "state";
+/** Only sessions of this category show (`f` cycles it); null shows every kind. Starts clear on every launch. */
+let kindFilter: Category | null = null;
+/** Categories worked out once per refresh: each one reads the session's work row. */
+const categories = new Map<string, Category>();
+const catOf = (s: SessionRow): Category => {
+  let c = categories.get(s.id);
+  if (!c) categories.set(s.id, (c = core.categoryOf(s)));
+  return c;
+};
 let order: core.SortOrder = "oldest";
 let flash: { text: string; until: number } | null = null;
 let lastVersion = -1;
@@ -193,7 +204,7 @@ const selected = () => allRows().find((s) => s.id === selectedId) ?? null;
 
 /** Short identifying fields match fuzzily; status and reply text only match the words as typed. */
 function matchScore(s: SessionRow, query: string): number | null {
-  const names = [core.displayName(s), s.title, core.categoryOf(s), core.location(s), s.agent, s.tmux_target, s.cwd?.replace(/^\/Users\/[^/]+/, "~"), ...core.workRefs(s)]
+  const names = [core.displayName(s), s.title, catOf(s), core.location(s), s.agent, s.tmux_target, s.cwd?.replace(/^\/Users\/[^/]+/, "~"), ...core.workRefs(s)]
     .filter(Boolean)
     .join(" ");
   const text = [label(s), s.detail, s.last_prompt].filter(Boolean).join(" ");
@@ -202,10 +213,55 @@ function matchScore(s: SessionRow, query: string): number | null {
   return a === null ? b : b === null ? a : Math.max(a, b);
 }
 
-/** Sessions the list shows: all of them, or the ones matching the `/` filter. */
-function visibleSessions(): SessionRow[] {
-  if (!filter?.trim()) return allRows();
-  return allRows().filter((s) => matchScore(s, filter!) !== null);
+/** Rows the kind filter lets through. */
+const kindRows = () => (kindFilter ? allRows().filter((s) => catOf(s) === kindFilter) : allRows());
+
+/**
+ * The list as drawn: `list` split into titled groups, by state or by category. Ended sessions are their own group
+ * last either way, and idle ones sort to the bottom of their group (the sessions already come in that order).
+ */
+function listGroups(list: SessionRow[]): { title: string; items: SessionRow[] }[] {
+  const live = list.filter((s) => !ended(s));
+  const lostOrEnded = {
+    title: showWeekOfEnded
+      ? "ENDED · last week · enter resumes · e shows only lost"
+      : "LOST · last day · enter resumes one, R all · e shows everything ended",
+    items: list.filter(ended),
+  };
+  if (grouping === "category")
+    return [
+      ...groupByCategory(live, catOf).map(([c, items]) => {
+        const need = items.filter((s) => !isStale(s) && kind(s) === "blocked").length;
+        return { title: `${c.toUpperCase()}${need ? ` · ${need} need you` : ""}`, items };
+      }),
+      lostOrEnded,
+    ];
+  const active = (k: (s: SessionRow) => boolean) => live.filter((s) => !isStale(s) && k(s));
+  return [
+    { title: "NEEDS YOU", items: active((s) => kind(s) === "blocked") },
+    { title: "YOUR TURN", items: active((s) => kind(s) === "waiting") },
+    { title: "WORKING", items: active((s) => kind(s) === "working" || kind(s) === "planning") },
+    { title: `IDLE · no activity for ${idleLabel()}+`, items: live.filter(isStale) },
+    lostOrEnded,
+  ];
+}
+
+/** Groups the list shows: the rows the kind filter and the `/` filter let through, split as drawn. */
+function visibleGroups() {
+  const rows = kindRows();
+  return listGroups(filter?.trim() ? rows.filter((s) => matchScore(s, filter!) !== null) : rows);
+}
+
+/** Sessions the list shows, in the order they are drawn, which is the order the cursor walks. */
+const visibleSessions = (): SessionRow[] => visibleGroups().flatMap((g) => g.items);
+
+/** Keeps the cursor on a row that is shown: the best match for a search, else the first row, else nothing. */
+function ensureSelection() {
+  const shown = visibleSessions();
+  if (shown.some((s) => s.id === selectedId)) return;
+  if (filter?.trim() && shown.length) return selectBestMatch();
+  if (shown.length) return select(shown[0].id);
+  selectedId = null;
 }
 
 /** Moves the selection to the best match whenever the query changes or the selection drops out of the results. */
@@ -213,7 +269,7 @@ function selectBestMatch() {
   if (!filter?.trim()) return;
   let best: SessionRow | null = null;
   let bestScore = -Infinity;
-  for (const s of allRows()) {
+  for (const s of kindRows()) {
     const score = matchScore(s, filter);
     if (score !== null && score > bestScore) {
       best = s;
@@ -327,8 +383,10 @@ function takeFocusRequest() {
     const { id, at } = JSON.parse(raw) as { id: string; at: number };
     if (at <= focusHandledAt || Date.now() - at > FOCUS_FRESH_MS) return;
     focusHandledAt = at;
-    if (!allRows().some((s) => s.id === id)) return;
+    const target = allRows().find((s) => s.id === id);
+    if (!target) return;
     filter = null;
+    if (kindFilter && catOf(target) !== kindFilter) kindFilter = null;
     select(id);
   } catch {}
 }
@@ -343,6 +401,7 @@ function refresh(force = false) {
   const v = db.open().query<{ data_version: number }, []>("PRAGMA data_version").get()?.data_version ?? 0;
   if (!force && v === lastVersion) return false;
   lastVersion = v;
+  categories.clear();
   const before = selected();
   sessions = core.sorted(order).filter((s) => s.pane !== process.env.TMUX_PANE);
   endedRows = showWeekOfEnded ? db.endedSessions(7 * DAY) : core.lostSessions().reverse();
@@ -350,7 +409,7 @@ function refresh(force = false) {
   takeFocusRequest();
   takeReturn();
   scoutNeeds();
-  if (filter?.trim() && !visibleSessions().some((x) => x.id === selectedId)) selectBestMatch();
+  ensureSelection();
   const s = selected();
   if (s && !tabPinned && (s.id !== before?.id || s.state !== before?.state)) {
     tab = defaultTab(s);
@@ -375,20 +434,7 @@ function select(id: string | null) {
 function listLines(width: number, height: number): string[] {
   const lines: string[] = [];
   let selLine = 0;
-  const groups: [string, (s: SessionRow) => boolean][] = [
-    ["NEEDS YOU", (s) => !ended(s) && !isStale(s) && kind(s) === "blocked"],
-    ["YOUR TURN", (s) => !ended(s) && !isStale(s) && kind(s) === "waiting"],
-    ["WORKING", (s) => !ended(s) && !isStale(s) && (kind(s) === "working" || kind(s) === "planning")],
-    [`IDLE · no activity for ${idleLabel()}+`, (s) => !ended(s) && isStale(s)],
-    [
-      showWeekOfEnded
-        ? "ENDED · last week · enter resumes · e shows only lost"
-        : "LOST · last day · enter resumes one, R all · e shows everything ended",
-      ended,
-    ],
-  ];
-  for (const [title, match] of groups) {
-    const items = visibleSessions().filter(match);
+  for (const { title, items } of visibleGroups()) {
     if (!items.length) continue;
     if (lines.length) lines.push("");
     const [head, ...rest] = title.split(" · ");
@@ -419,10 +465,13 @@ function listLines(width: number, height: number): string[] {
       const badgeText = badge
         ? ` · ${badge.tone === "bad" ? A.red : badge.tone === "pending" ? A.amber : badge.tone === "good" ? A.green : A.grey}${link(pr!.url, badge.ref)}${badge.rest}${A.reset}${bg}${A.grey}`
         : "";
-      lines.push(fit(`${bg}${marker}${A.reset}${bg}   ${gone && s.end_reason === "lost" ? A.amber : idle ? A.grey : tint(s)}${status}${A.reset}${bg}${A.grey} · ${core.categoryOf(s)}${badgeText}${detail}`, width, bg));
+      lines.push(fit(`${bg}${marker}${A.reset}${bg}   ${gone && s.end_reason === "lost" ? A.amber : idle ? A.grey : tint(s)}${status}${A.reset}${bg}${A.grey}${grouping === "state" ? ` · ${catOf(s)}` : ""}${badgeText}${detail}`, width, bg));
     }
   }
-  if (sessions.length && !visibleSessions().length) lines.push("", ` ${A.grey}No sessions match /${filter}${A.reset}`, ` ${A.grey}esc clears the filter${A.reset}`);
+  if (sessions.length && !visibleSessions().length) {
+    const looking = [kindFilter ? `${kindFilter} sessions` : null, filter?.trim() ? `/${filter}` : null].filter(Boolean).join(" ");
+    lines.push("", ` ${A.grey}No sessions match ${looking}${A.reset}`, ` ${A.grey}${filter?.trim() ? "esc clears the filter" : "f shows another kind"}${A.reset}`);
+  }
   if (!sessions.length) lines.push("", ` ${A.grey}No live sessions.${A.reset}`, ` ${A.grey}Agents with carriot hooks show up here.${A.reset}`);
   const start = Math.max(0, Math.min(selLine - Math.floor(height / 2), lines.length - height));
   return lines.slice(start, start + height);
@@ -512,7 +561,7 @@ function detailLines(width: number, height: number): string[] {
     ended(s)
       ? `${A.bold}${core.displayName(s)}${A.reset}  ${s.end_reason === "lost" ? A.amber : A.grey}${A.bold}${endedLabel(s)}${A.reset} ${A.grey}${core.ago(s.ended_at ?? s.updated_at)} ago · enter resumes${A.reset}`
       : `${A.bold}${core.displayName(s)}${A.reset}  ${tint(s)}${A.bold}${label(s)}${A.reset} ${A.grey}for ${core.ago(s.state_since)}${A.reset}`,
-    `${A.grey}${[s.agent, core.categoryOf(s), (s.cwd ?? "").replace(/^\/Users\/[^/]+/, "~"), s.tmux_target, s.mode && s.mode !== "default" ? `mode ${s.mode}` : null, s.id.slice(0, 8)].filter(Boolean).join(" · ")}${A.reset}`,
+    `${A.grey}${[s.agent, catOf(s), (s.cwd ?? "").replace(/^\/Users\/[^/]+/, "~"), s.tmux_target, s.mode && s.mode !== "default" ? `mode ${s.mode}` : null, s.id.slice(0, 8)].filter(Boolean).join(" · ")}${A.reset}`,
     ...workLines(s),
     TABS.map((t, i) => {
       const on = available(s, t);
@@ -542,8 +591,11 @@ function header(width: number): string {
   const count = { blocked: 0, waiting: 0, working: 0, idle: 0 };
   for (const s of sessions) count[isStale(s) ? "idle" : kind(s) === "planning" ? "working" : (kind(s) as keyof typeof count)]++;
   const lost = core.lostSessions().length;
-  const left = ` ${A.bold}CARRIOT REINS${A.reset}   ${A.red}● ${count.blocked} need you${A.reset}   ${A.amber}● ${count.waiting} your turn${A.reset}   ${A.green}● ${count.working} working${A.reset}   ${A.grey}○ ${count.idle} idle${A.reset}${lost ? `   ${A.amber}${A.bold}↻ ${lost} lost · R resumes all${A.reset}` : ""}`;
-  const clock = `${A.grey}${order === "oldest" ? "longest waiting first" : "most recent first"} · ${A.reset}${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  // A kind filter hides sessions, so say when one of the hidden ones is waiting on you.
+  const elsewhere = kindFilter ? sessions.filter((s) => catOf(s) !== kindFilter && !isStale(s) && kind(s) === "blocked").length : 0;
+  const only = kindFilter ? `   ${A.inverse} ${kindFilter} only ${A.reset}${elsewhere ? ` ${A.red}${A.bold}+${elsewhere} need you elsewhere${A.reset}` : ""}` : "";
+  const left = ` ${A.bold}CARRIOT REINS${A.reset}${A.red}● ${count.blocked} need you${A.reset}   ${A.amber}● ${count.waiting} your turn${A.reset}   ${A.green}● ${count.working} working${A.reset}   ${A.grey}○ ${count.idle} idle${A.reset}${only}${lost ? `   ${A.amber}${A.bold}↻ ${lost} lost · R resumes all${A.reset}` : ""}`;
+  const clock = `${A.grey}${grouping === "category" ? "by category · " : ""}${order === "oldest" ? "longest waiting first" : "most recent first"} · ${A.reset}${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
   return fit(`${left}${" ".repeat(Math.max(1, width - visible(left) - visible(clock) - 1))}${A.grey}${clock}${A.reset}`, width);
 }
 
@@ -575,7 +627,7 @@ function footer(width: number): string {
   }
   if (flash && flash.until > Date.now()) return fit(` ${A.bold}${flash.text}${A.reset}`, width);
   const keys = [
-    ["j/k ^n/^p", "move"], ["/", "find"], ["s", "sort"], ["enter", "open"], ["n", "next waiting"], ["1-5", "tabs"], ["J/K ^d/^u", "scroll"],
+    ["j/k ^n/^p", "move"], ["/", "find"], ["s", "sort"], ["v", "group"], ["f", "kind"], ["enter", "open"], ["n", "next waiting"], ["1-5", "tabs"], ["J/K ^d/^u", "scroll"],
     ["r", "reply"], ["p", "park"], ["t", "retag"], ["a", "new"], ["x", "close"], ["?", "ask"], ["b", "report"], ["w", "write-up"], ["S", "scout pane"], ["R", "resume lost"], ["o", "web"], ["q", "quit"],
   ];
   return fit(` ${keys.map(([k, v]) => `${A.bold}${k}${A.reset} ${A.grey}${v}${A.reset}`).join("  ")}`, width);
@@ -794,6 +846,15 @@ function onKey(key: string) {
       if (selected() && ended(selected()!)) return say("That session has already ended.");
       confirmClose = selected()?.id ?? null;
       return;
+    case "v":
+      grouping = grouping === "state" ? "category" : "state";
+      db.putSetting("reins_grouping", grouping);
+      ensureSelection();
+      return say(grouping === "category" ? "Grouped by category" : "Grouped by state");
+    case "f":
+      kindFilter = nextFilter(kindFilter);
+      ensureSelection();
+      return say(kindFilter ? `Showing ${kindFilter} sessions only` : "Showing every kind");
     case "t": {
       const s = selected();
       if (!s) return;
@@ -880,6 +941,7 @@ export function reins() {
     console.error("carriot reins needs a terminal");
     process.exit(1);
   }
+  if (db.getSetting("reins_grouping") === "category") grouping = "category";
   out.write(`${ESC}?1049h${ESC}?25l${ESC}2J`);
   process.stdin.setRawMode(true);
   process.stdin.setEncoding("utf8");

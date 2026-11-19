@@ -29,7 +29,8 @@ const self = () => `${process.env.CARRIOT_BIN ?? "carriot"}`;
 const CHEATSHEET = (c: typeof C) => `${c.bold}CARRIOT CHEATSHEET${c.reset}  ${c.dim}one chariot, many horses: see who is pulling and who is waiting on you${c.reset}
 
 ${c.bold}CATEGORIES${c.reset}  every session is dev, review, alert or misc (set when started, from its first prompt, or by its work);
-  t in reins cycles it, carriot tag [name] <category> sets it, / and carriot ls --category filter by it
+  reins: t retags the selected session, v groups the list by category, f shows one kind only, / finds by it
+  carriot tag [name] <category> sets it, carriot ls --category C lists one kind
 
 ${c.bold}TICKETS AND PRS${c.reset}  each session shows its ticket and PR (#123 ✓/…/✗ CI, changes/approved); the watcher checks
   every 2 min and turns a session red when CI fails, changes are requested or new comments land (your next prompt clears it)

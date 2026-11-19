@@ -688,6 +688,25 @@ describe("session categories", () => {
     expect(core.categoryOf(apply("cat-7", { cwd: "/hub/sessions/review-api#9/api", category: "dev" }))).toBe("dev");
   });
 
+  test("sessions group by category in a fixed order, empty groups left out, each keeping its own order", () => {
+    const rows = [
+      { id: "a", c: "misc" },
+      { id: "b", c: "review" },
+      { id: "c", c: "dev" },
+      { id: "d", c: "review" },
+    ] as { id: string; c: import("../src/category").Category }[];
+    const groups = cat.groupByCategory(rows, (r) => r.c).map(([c, items]) => [c, items.map((r) => r.id)]);
+    expect(groups).toEqual([["dev", ["c"]], ["review", ["b", "d"]], ["misc", ["a"]]]);
+    expect(cat.groupByCategory([], () => "dev")).toEqual([]);
+  });
+
+  test("the kind filter cycles through every category and back to all", () => {
+    const seen: (string | null)[] = [];
+    let f: import("../src/category").Category | null = null;
+    for (let i = 0; i <= cat.CATEGORIES.length; i++) seen.push((f = cat.nextFilter(f)));
+    expect(seen).toEqual(["dev", "review", "alert", "misc", null]);
+  });
+
   test("retagging cycles through every category and comes back", () => {
     let c: import("../src/category").Category = "dev";
     const seen: string[] = [c];

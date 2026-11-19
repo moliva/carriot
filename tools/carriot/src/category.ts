@@ -32,6 +32,17 @@ export function categoryFromPrompt(prompt: string | null | undefined): Category 
   return null;
 }
 
+/** `items` split by category, in CATEGORIES order with the empty ones left out; each group keeps the order it had. */
+export function groupByCategory<T>(items: T[], of: (item: T) => Category): [Category, T[]][] {
+  return CATEGORIES.map((c): [Category, T[]] => [c, items.filter((item) => of(item) === c)]).filter(([, group]) => group.length > 0);
+}
+
+/** The next kind filter in the cycle: everything (null), then each category, then everything again. */
+export function nextFilter(current: Category | null): Category | null {
+  if (!current) return CATEGORIES[0];
+  return CATEGORIES[CATEGORIES.indexOf(current) + 1] ?? null;
+}
+
 /** The next category in the cycle, for a key that retags a session without asking which. */
 export function nextCategory(c: Category): Category {
   return CATEGORIES[(CATEGORIES.indexOf(c) + 1) % CATEGORIES.length];

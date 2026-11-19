@@ -97,6 +97,13 @@ Reins shows it on each row after the state (`your turn · review · api#9 ✓`) 
 
 **Changing it:** `t` in reins cycles the selected session through the four, or `carriot tag [name|id] <category>` sets it (no name means this pane; `--clear` goes back to what the work says; `carriot tag <name>` shows it). A category set by hand replaces whatever was there. The words `implementation` and `impl` also work for `dev`.
 
+**In reins**, two keys change how the list looks, next to `s` for the sort order:
+
+- `v` groups the list by category (`DEV`, `REVIEW`, `ALERT`, `MISC`, each with how many of its sessions need you) instead of by state. Inside a group, sessions keep the usual order: needs you first, longest waiting first, idle ones last and dimmed. Lost and ended sessions stay in their own group at the bottom. The rows then show the state without the category, which the group already says. The choice is remembered between launches.
+- `f` shows one kind only, cycling `dev` → `review` → `alert` → `misc` → everything. The header says which kind is on (`review only`) and how many sessions in the hidden kinds are waiting on you (`+2 need you elsewhere`), so a filter never hides something urgent. It starts clear on every launch, and jumping to a session from tmux clears it when that session would be hidden.
+
+Both work together with `/` search, and `j`/`k`, `g`/`G` and the cursor follow what is drawn.
+
 ## Tickets and PRs
 
 Each session shows what it is working on: the ticket (from its `sessions/<TICKET>/` folder or a Linear-style branch), the branch, and the PR with its CI and review state. Reins puts a badge on each row (`#9936 ✓ approved`, `#9668 ✗`, `#9939 … changes`) and a ticket and PR line in the detail pane; the dashboard shows the same, and `/` finds sessions by ticket or PR reference (`ABC-12`, `api#321`). The picker (`prefix F`, `cmd+g`) shows the same ticket and PR reference on each row, so it finds them too. Review sessions (`sessions/review-<repo>#<n>/`) show the PR under review. When an agent has wandered back to the hub root, the last session folder in its conversation is used.
