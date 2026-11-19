@@ -712,7 +712,38 @@ describe("alfred workflow", () => {
     expect(alfred.sessionItems([tracked], "https://linear.app/acme/issue/ABC-12/x").map((i) => i.arg)).toEqual(["session:id-1", "new:ABC-12"]);
   });
 
+  test("a Datadog alert is read from a link to its monitor, nothing else", () => {
+    const url = "https://app.datadoghq.com/monitors/12345678?group=env%3Aprod&from_ts=1&to_ts=2&event_id=9";
+    expect(alfred.parseAlert(url)).toEqual({ id: "12345678", url });
+    expect(alfred.parseAlert(`alert <${url}|Monitor name> fired.`)).toEqual({ id: "12345678", url });
+    expect(alfred.parseAlert("see https://acme.datadoghq.eu/monitors/42.")).toEqual({ id: "42", url: "https://acme.datadoghq.eu/monitors/42" });
+    expect(alfred.parseAlert("https://us5.datadoghq.com/monitors#42?to_ts=1")?.id).toBe("42");
+    expect(alfred.parseAlert("https://app.datadoghq.com/monitors/manage")).toBeNull();
+    expect(alfred.parseAlert("https://app.datadoghq.com/dashboard/abc-def-ghi")).toBeNull();
+    expect(alfred.parseAlert("https://evildatadoghq.com/monitors/42")).toBeNull();
+    expect(alfred.parseAlert("https://app.datadoghq.com.evil.com/monitors/42")).toBeNull();
+    expect(alfred.parseAlert("http://app.datadoghq.com/monitors/42")).toBeNull();
+    expect(alfred.parseAlert("monitors/42")).toBeNull();
+  });
+
+  test("a pasted alert offers an investigation after the sessions already on it", () => {
+    const url = "https://app.datadoghq.com/monitors/12345678?group=env%3Aprod";
+    expect(alfred.sessionItems([], url)).toEqual([
+      { title: "Investigate Datadog monitor 12345678", subtitle: "opens a new agent to look into the alert", arg: `alert:${url}` },
+    ]);
+    const earlier = entry({ s: session({ name: "alert-12345678", last_prompt: `Investigate this Datadog alert: ${url}` }), ticket: null, ticketUrl: null, pr: null });
+    expect(alfred.sessionItems([entry(), earlier], url).map((i) => i.arg)).toEqual(["session:id-1", `alert:${url}`]);
+  });
+
+  test("the alert prompt carries the link as pasted and keeps the agent read-only", () => {
+    const prompt = alfred.alertPrompt({ id: "42", url: "https://app.datadoghq.com/monitors/42?group=a" });
+    expect(prompt.startsWith("Investigate this Datadog alert: https://app.datadoghq.com/monitors/42?group=a\n")).toBe(true);
+    expect(prompt).toContain("monitor 42");
+    expect(prompt).toContain("read-only");
+  });
+
   test("the action ignores anything it does not know", () => {
+    expect(alfred.go("alert:not a link", "/hub")).toContain("not a Datadog monitor link");
     expect(alfred.go("open:file:///etc/passwd", "/hub")).toBe("");
     expect(alfred.go("whatever", "/hub")).toBe("");
     expect(alfred.go("new:not a ticket", "/hub")).toContain("not a ticket");

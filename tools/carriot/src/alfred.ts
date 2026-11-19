@@ -11,7 +11,7 @@ import { linearLinks, prBadge, prRef, repoName, type PrStatus } from "./work";
 export interface AlfredItem {
   title: string;
   subtitle?: string;
-  /** What the workflow's action receives: `session:<id>`, `reins:`, `new:<TICKET>`, `review:<PR>`, `scratch:<name>` or `open:<url>`. */
+  /** What the workflow's action receives: `session:<id>`, `reins:`, `new:<TICKET>`, `review:<PR>`, `alert:<url>`, `scratch:<name>` or `open:<url>`. */
   arg?: string;
   valid?: boolean;
   mods?: Record<string, { arg?: string; subtitle?: string; valid?: boolean }>;
@@ -53,6 +53,30 @@ export function parsePr(text: string): PrRef | null {
   if (link) return { owner: link[1], repo: link[2], number: Number(link[3]), ref: link[0] };
   const short = text.trim().match(/^(?:([\w.-]+)\/)?([\w.-]+)#(\d+)$/);
   return short ? { owner: short[1] ?? null, repo: short[2], number: Number(short[3]), ref: text.trim() } : null;
+}
+
+export interface AlertRef {
+  /** The Datadog monitor id. */
+  id: string;
+  /** The link as pasted: its query string says which alert instance fired (group, time range, event). */
+  url: string;
+}
+
+/** A Datadog monitor from a link to it (anywhere in the text), the way alert notifications link it. */
+export function parseAlert(text: string): AlertRef | null {
+  const m = text.match(/https:\/\/(?:[\w-]+\.)*(?:datadoghq\.(?:com|eu)|ddog-gov\.com)\/monitors(?:\/|#)(\d+)[^\s<>|)"']*/);
+  return m ? { id: m[1], url: m[0].replace(/[.,;:!?]+$/, "") } : null;
+}
+
+/** The first message of a session that looks into an alert. */
+export function alertPrompt(a: AlertRef): string {
+  return [
+    `Investigate this Datadog alert: ${a.url}`,
+    "",
+    `It is monitor ${a.id}; the link's query string (group, time range, event) says which alert instance fired.`,
+    "Use the Datadog tools to read the monitor and what it saw, find out what triggered it and when, and check the related logs, metrics, traces and recent changes or deploys.",
+    "Report the likely cause and whether it needs action. This is read-only: do not mute, edit or resolve anything. If a fix is needed, tell me what and where before creating tickets or starting work.",
+  ].join("\n");
 }
 
 /** `repo#123` for each GitHub pull request link in the text. */
@@ -161,6 +185,14 @@ function reviewItem(p: PrRef): AlfredItem {
   };
 }
 
+function alertItem(a: AlertRef): AlfredItem {
+  return {
+    title: `Investigate Datadog monitor ${a.id}`,
+    subtitle: "opens a new agent to look into the alert",
+    arg: `alert:${a.url}`,
+  };
+}
+
 /** The name a typed query gives an empty session: lowercase words joined by hyphens; null when nothing is left. */
 export function sessionName(text: string): string | null {
   const name = text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -189,19 +221,23 @@ function reinsItem(entries: Entry[]): AlfredItem {
 /**
  * The list: reins first (when the query is empty or looks for it), then the sessions matching the query. A typed
  * ticket id or Linear link also offers a new session after the matches, and a PR reference or link offers a review
- * session; a session already running for that ticket or PR comes first, so enter goes back to it. Any other text also
- * offers an empty session named after it, last, so a name that matches nothing is one enter away.
+ * session, and a Datadog monitor link offers an investigation; a session already running for that ticket, PR or
+ * monitor comes first, so enter goes back to it. Any other text also offers an empty session named after it, last,
+ * so a name that matches nothing is one enter away.
  */
 export function sessionItems(entries: Entry[], query: string): AlfredItem[] {
   const t = parseTicket(query);
   const p = t ? null : parsePr(query);
-  // A pasted link says what to look for; searching for the whole URL would find nothing.
-  const looking = t ? t.id : p ? `${p.repo}#${p.number}` : query;
+  const a = t || p ? null : parseAlert(query);
+  // A pasted link says what to look for; searching for the whole URL would find nothing. The monitor id is in the
+  // name of the session started for it and in the link of its first prompt.
+  const looking = t ? t.id : p ? `${p.repo}#${p.number}` : a ? a.id : query;
   const items = search(entries, looking).map(toItem);
   if (!query.trim() || fuzzyScore(query, "reins overview dashboard") !== null) items.unshift(reinsItem(entries));
   if (t) items.push(newItem(t.id, db.getTicket(t.id)?.title ?? null, "opens a new agent running /carriot:new"));
   if (p) items.push(reviewItem(p));
-  const name = t || p ? null : sessionName(query);
+  if (a) items.push(alertItem(a));
+  const name = t || p || a ? null : sessionName(query);
   if (name) items.push(scratchItem(name));
   return items.length ? items : [{ title: "No session matches", subtitle: "Search by name, ticket, PR number, repo or branch", valid: false }];
 }
@@ -256,6 +292,10 @@ export function go(arg: string, hub: string, bin = "carriot"): string {
     case "review": {
       const p = parsePr(value);
       return p ? startSession(`/review-pr ${p.ref}`, `review-${p.repo}-${p.number}`.toLowerCase(), hub) : `not a PR: ${value}`;
+    }
+    case "alert": {
+      const a = parseAlert(value);
+      return a ? startSession(alertPrompt(a), `alert-${a.id}`, hub) : `not a Datadog monitor link: ${value}`;
     }
     case "scratch": {
       const name = sessionName(value);
