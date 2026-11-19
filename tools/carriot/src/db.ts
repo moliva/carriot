@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   project_dir TEXT,
   tmux_server TEXT,
   attention TEXT,
-  attention_since INTEGER
+  attention_since INTEGER,
+  category TEXT
 );
 CREATE TABLE IF NOT EXISTS artifacts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,6 +97,7 @@ export function open(): Database {
     tmux_server: "TEXT",
     attention: "TEXT",
     attention_since: "INTEGER",
+    category: "TEXT",
   };
   for (const [col, type] of Object.entries(add)) if (!cols.has(col)) db.exec(`ALTER TABLE sessions ADD COLUMN ${col} ${type}`);
   return db;
@@ -125,8 +127,8 @@ export function apply(ev: AgentEvent, tmux: TmuxInfo = {}): { prev: SessionRow |
 
     const stateChanged = !prev || prev.state !== state;
     d.query(
-      `INSERT INTO sessions (id, agent, name, title, cwd, pane, window_id, tmux_target, state, mode, detail, last_prompt, last_message, started_at, updated_at, state_since, ended_at, bg, end_reason, project_dir, tmux_server)
-       VALUES ($id, $agent, $name, $title, $cwd, $pane, $window_id, $tmux_target, $state, $mode, $detail, $last_prompt, $last_message, $now, $now, $now, $ended_at, $bg, $end_reason, $project_dir, $tmux_server)
+      `INSERT INTO sessions (id, agent, name, title, cwd, pane, window_id, tmux_target, state, mode, detail, last_prompt, last_message, started_at, updated_at, state_since, ended_at, bg, end_reason, project_dir, tmux_server, category)
+       VALUES ($id, $agent, $name, $title, $cwd, $pane, $window_id, $tmux_target, $state, $mode, $detail, $last_prompt, $last_message, $now, $now, $now, $ended_at, $bg, $end_reason, $project_dir, $tmux_server, $category)
        ON CONFLICT(id) DO UPDATE SET
          name = coalesce($name, name),
          title = coalesce($title, title),
@@ -146,6 +148,7 @@ export function apply(ev: AgentEvent, tmux: TmuxInfo = {}): { prev: SessionRow |
          end_reason = CASE WHEN state = 'ended' AND $state = 'ended' THEN coalesce(end_reason, $end_reason) ELSE $end_reason END,
          project_dir = coalesce($project_dir, project_dir),
          tmux_server = coalesce($tmux_server, tmux_server),
+         category = coalesce(category, $category),
          attention = CASE WHEN $engaged THEN NULL ELSE attention END,
          attention_since = CASE WHEN $engaged THEN NULL ELSE attention_since END`,
     ).run({
@@ -169,6 +172,8 @@ export function apply(ev: AgentEvent, tmux: TmuxInfo = {}): { prev: SessionRow |
       $end_reason: state === "ended" ? (ev.endReason ?? "exited") : null,
       $project_dir: ev.projectDir ?? null,
       $tmux_server: tmux.server ?? null,
+      // Set once: what the session was started for, else what its first prompt says (a later prompt never retags it).
+      $category: ev.category ?? (prev?.last_prompt ? null : (ev.promptCategory ?? null)),
       // A prompt means you are back on it, which settles whatever PR activity flagged it.
       $engaged: ev.prompt !== undefined ? 1 : 0,
     });
@@ -188,6 +193,11 @@ export function apply(ev: AgentEvent, tmux: TmuxInfo = {}): { prev: SessionRow |
     }
     return { prev, next: getSession(ev.sessionId) };
   }).immediate();
+}
+
+/** Tags a session by hand, replacing whatever was set; null clears it so the category follows the work again. */
+export function setCategory(id: string, category: string | null) {
+  open().query("UPDATE sessions SET category = ? WHERE id = ?").run(category, id);
 }
 
 /** Overwrites tmux placement (pane may move between windows and sessions, or detach entirely). */

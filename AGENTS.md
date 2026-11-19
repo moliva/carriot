@@ -54,6 +54,7 @@ When the user asks you to start, spawn or open a session for some work (typicall
 - `-d` opens a tmux window next to yours without switching the user to it. `bin/carriot` is excluded from the sandbox, which blocks the tmux socket; if it still fails with "Could not open a tmux window", rerun it with `dangerouslyDisableSandbox: true`.
 - `<desc>` is a 1–3 word hyphenated label, the same as a window name (see Tmux below).
 - `<prompt>` is the new session's first message, and that session starts with no context. For a ticket, use `/carriot:new <TICKET-ID>` followed by anything from this conversation it needs (decisions, scope, which repos). For other work, write a self-contained brief.
+- Add `--category dev|review|alert|misc` to tag what kind of work it is. A prompt starting with `/carriot:new <TICKET-ID>` or `/review-pr` is tagged without it; use the flag for anything else that is clearly one kind (e.g. `--category alert` for a monitor investigation), and leave it off for `misc`.
 - Start one session per piece of work. Then tell the user what you started and that they can reach it from reins (`prefix T`) or with `carriot jump <name>`.
 - **Always give the user a clickable link in the same reply that reports the spawn**, never as a follow-up. `carriot new` does not print the session id, so look it up right after spawning (`ls` writes to the carriot database, which the sandbox blocks, so run it with `dangerouslyDisableSandbox: true`):
   ```sh

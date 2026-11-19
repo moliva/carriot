@@ -1,8 +1,9 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { DEFAULT_CATEGORY, parseCategory, type Category } from "./category";
 import * as db from "./db";
 import * as notify from "./notify";
-import { prRef, ticketUrl, type PrStatus } from "./work";
+import { prRef, reviewedPr, ticketUrl, type PrStatus } from "./work";
 import * as tmux from "./tmux";
 import { isStale, needsYou, urgency, type AdapterResult, type AgentEvent, type SessionRow } from "./types";
 
@@ -283,6 +284,17 @@ export function displayName(s: SessionRow): string {
   return m ? [m[1], m[2]].filter(Boolean).join("/") : cwd.split("/").pop() || s.id.slice(0, 8);
 }
 
+/**
+ * What kind of work a session is: the category it was given (when started, from its first prompt, or by hand), else
+ * what its work says: a review folder is a review, a ticket is development, anything else is misc.
+ */
+export function categoryOf(s: SessionRow): Category {
+  const given = parseCategory(s.category);
+  if (given) return given;
+  if (reviewedPr(s.cwd)) return "review";
+  return db.getWork(s.id)?.ticket ? "dev" : DEFAULT_CATEGORY;
+}
+
 /** The ticket id and PR reference (`api#321`) a session works on: what the picker shows and both searches match. */
 export function workRefs(s: SessionRow): string[] {
   const w = db.getWork(s.id);
@@ -343,6 +355,8 @@ export function newAgent(opts: {
   detach?: boolean;
   /** tmux session to open the window in, whichever pane started this (see tmux.newWindow). */
   pin?: string;
+  /** What the session is for; its hooks read it from CARRIOT_CATEGORY. Without one, the first prompt or the work decides. */
+  category?: Category;
 }): { ok: boolean; message: string; pane?: string } {
   const claude = Bun.which("claude") ?? "claude";
   const flags = ["--model", AGENT_MODEL, ...(opts.skipPermissions === false ? [] : ["--dangerously-skip-permissions"])];
@@ -351,7 +365,8 @@ export function newAgent(opts: {
     if (!prompt) return { ok: false, message: "A background session needs a first prompt." };
     const p = Bun.spawnSync([claude, "--bg", ...flags, prompt], {
       cwd: opts.cwd,
-      env: { ...process.env, ...agentEnv() },
+      // A category set for the session that runs this must not leak into the one it starts.
+      env: { ...process.env, ...agentEnv(), CARRIOT_CATEGORY: opts.category ?? "" },
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -365,7 +380,7 @@ export function newAgent(opts: {
     name: opts.name ?? "claude",
     detach: opts.detach,
     pin: opts.pin,
-    command: windowCommand([...flags, ...(brief ? [shellQuote(brief)] : [])], agentEnv()),
+    command: windowCommand([...flags, ...(brief ? [shellQuote(brief)] : [])], { ...agentEnv(), ...(opts.category ? { CARRIOT_CATEGORY: opts.category } : {}) }),
   });
   if (!pane) return { ok: false, message: "Could not open a tmux window (is tmux running?)." };
   // A detached start is for someone to attach to later: keep it in the park, out of the way of the current session.

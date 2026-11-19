@@ -1,3 +1,5 @@
+import type { Category } from "./category";
+
 export type State =
   | "working"
   | "needs_approval"
@@ -45,6 +47,10 @@ export interface AgentEvent {
   projectDir?: string;
   /** Why a session ended, for `state: "ended"` events (see db.EndReason). */
   endReason?: "exited" | "clear" | "lost";
+  /** What the session was started for (CARRIOT_CATEGORY); recorded when the session has no category yet. */
+  category?: Category;
+  /** What the prompt gives away; only the session's first prompt counts, and only when nothing tagged it. */
+  promptCategory?: Category;
 }
 
 export interface AdapterResult {
@@ -78,6 +84,8 @@ export interface SessionRow {
   /** Why the session needs you beyond its agent state (e.g. "CI failing" on its PR); cleared by your next prompt. */
   attention: string | null;
   attention_since: number | null;
+  /** Set when started (CARRIOT_CATEGORY), from the first prompt, or by hand; null falls back to what the work says (core.categoryOf). */
+  category: string | null;
 }
 
 export interface ArtifactRow {

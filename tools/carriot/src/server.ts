@@ -27,6 +27,7 @@ function snapshot() {
   return core.sorted().map((s) => ({
     ...s,
     display_name: core.displayName(s),
+    category: core.categoryOf(s),
     label: label(s),
     location: core.location(s),
     stale: isStale(s),

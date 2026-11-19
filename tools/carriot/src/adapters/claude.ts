@@ -1,4 +1,5 @@
 import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync } from "node:fs";
+import { categoryFromPrompt, parseCategory } from "../category";
 import { isPrCreate, prArtifact } from "../pr";
 import type { AdapterResult, AgentEvent } from "../types";
 
@@ -77,6 +78,7 @@ export function adapt(h: ClaudeHook, env: Record<string, string | undefined> = p
     mode: h.permission_mode,
     title: h.session_title || undefined,
     projectDir: env.CLAUDE_PROJECT_DIR || undefined,
+    category: parseCategory(env.CARRIOT_CATEGORY) ?? undefined,
   };
 
   switch (h.hook_event_name) {
@@ -85,7 +87,14 @@ export function adapt(h: ClaudeHook, env: Record<string, string | undefined> = p
 
     case "UserPromptSubmit":
       return {
-        event: { ...base, state: "working", prompt: firstLine(h.prompt, 300), detail: firstLine(h.prompt), refreshTmux: true },
+        event: {
+          ...base,
+          state: "working",
+          prompt: firstLine(h.prompt, 300),
+          detail: firstLine(h.prompt),
+          refreshTmux: true,
+          promptCategory: categoryFromPrompt(h.prompt) ?? undefined,
+        },
       };
 
     case "PreToolUse": {

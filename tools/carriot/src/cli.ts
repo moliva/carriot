@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, openSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { adapt as claude } from "./adapters/claude";
+import { CATEGORIES, parseCategory } from "./category";
 import * as core from "./core";
 import * as db from "./db";
 import { ansiFg, COLOUR, DELTA_THEME, GLOW_STYLE } from "./palette";
@@ -26,6 +27,9 @@ const color = (s: SessionRow) =>
 const self = () => `${process.env.CARRIOT_BIN ?? "carriot"}`;
 
 const CHEATSHEET = (c: typeof C) => `${c.bold}CARRIOT CHEATSHEET${c.reset}  ${c.dim}one chariot, many horses: see who is pulling and who is waiting on you${c.reset}
+
+${c.bold}CATEGORIES${c.reset}  every session is dev, review, alert or misc (set when started, from its first prompt, or by its work);
+  t in reins cycles it, carriot tag [name] <category> sets it, / and carriot ls --category filter by it
 
 ${c.bold}TICKETS AND PRS${c.reset}  each session shows its ticket and PR (#123 ✓/…/✗ CI, changes/approved); the watcher checks
   every 2 min and turns a session red when CI fails, changes are requested or new comments land (your next prompt clears it)
@@ -99,8 +103,12 @@ ${c.bold}COMMANDS${c.reset}
             [--here|--cwd D]  start in this pane's directory / D (default: carriot root)
             [--safe]          keep normal permission prompts
             [--name N]        window name (default: claude)
+            [--category C]    dev, review, alert or misc (otherwise the first prompt or the work decides)
             [-d|--detach]     start it parked, without switching to it (for agents spawning sessions)
   carriot ls [--json]           list live sessions, most urgent first
+            [--category C]    only that category
+  carriot tag [name|id] [C]     show or set a session's category: dev, review, alert, misc (no name: this pane;
+                              --clear lets it follow its work again)
   carriot next                  jump to the session that has waited the longest
   carriot jump <name|id>        switch tmux to a session (unparks or attaches first)
   carriot park [name|id]        move a session out of sight; it keeps running
@@ -209,7 +217,7 @@ function row(s: SessionRow, width = 40): string {
   // The ticket and PR reference sit before the detail so fzf (which searches only the displayed row) can match them.
   const refs = core.workRefs(s).join(" ");
   const detail = (s.detail ?? "").replace(/\s+/g, " ").slice(0, refs ? Math.max(10, width - refs.length - 2) : width);
-  return `${color(s)}●${C.reset} ${C.bold}${padded}${C.reset} ${color(s)}${st}${C.reset} ${C.dim}${age}${C.reset}  ${refs ? `${C.dim}${refs}${C.reset}  ` : ""}${detail}`;
+  return `${color(s)}●${C.reset} ${C.bold}${padded}${C.reset} ${color(s)}${st}${C.reset} ${C.dim}${age}  ${core.categoryOf(s).padEnd(6)}${C.reset}  ${refs ?`${C.dim}${refs}${C.reset}  ` : ""}${detail}`;
 }
 
 async function preview(s: SessionRow) {
@@ -339,9 +347,12 @@ async function main() {
     }
     case "ls": {
       core.reconcile({ background: true });
-      const list = rest.includes("--ended") ? db.endedSessions(7 * 24 * 3600_000) : core.sorted();
-      if (rest.includes("--json")) return console.log(JSON.stringify(list, null, 2));
-      const width = Math.max(20, (process.stdout.columns ?? 120) - 55);
+      const only = rest.includes("--category") ? parseCategory(rest[rest.indexOf("--category") + 1]) : undefined;
+      if (only === null) return notify(`--category needs one of: ${CATEGORIES.join(", ")}`, true);
+      const everyone = rest.includes("--ended") ? db.endedSessions(7 * 24 * 3600_000) : core.sorted();
+      const list = only ? everyone.filter((s) => core.categoryOf(s) === only) : everyone;
+      if (rest.includes("--json")) return console.log(JSON.stringify(list.map((s) => ({ ...s, category: core.categoryOf(s) })), null, 2));
+      const width = Math.max(20, (process.stdout.columns ?? 120) - 63);
       if (rest.includes("--fzf")) return console.log(list.map((s) => `${s.id}\t${row(s, width)}`).join("\n"));
       if (!list.length) return console.log(`${C.dim}no live sessions${C.reset}`);
       return console.log(list.map((s) => row(s, width)).join("\n"));
@@ -356,6 +367,27 @@ async function main() {
     }
     case "jump":
       return reconnectAndJump(need(rest[0]));
+    case "tag": {
+      // carriot tag [name|id] [category|--clear]; with one word it is the category and the session is this pane's,
+      // unless it is not a category but names a session, which shows that session's category.
+      core.reconcile();
+      const clear = rest.includes("--clear");
+      const words = rest.filter((w) => w !== "--clear");
+      const show = (s: SessionRow) => console.log(`${core.displayName(s)}: ${core.categoryOf(s)}${s.category ? "" : " (from its work)"}`);
+      let wanted = clear ? null : words.length ? parseCategory(words[words.length - 1]) : undefined;
+      let ref = words.length > (clear ? 0 : 1) ? words[0] : undefined;
+      if (wanted === null && !clear) {
+        const lone = words.length === 1 ? core.resolve(words[0], { ended: true }) : null;
+        if (!lone) return notify(`not a category: ${words[words.length - 1]} (${CATEGORIES.join(", ")})`, true);
+        [ref, wanted] = [words[0], undefined];
+      }
+      const pane = process.env.TMUX_PANE;
+      const s = ref ? core.resolve(ref, { ended: true }) : core.sorted().find((x) => x.pane === pane);
+      if (!s) return notify(`no session matching '${ref ?? ""}'${ref ? "" : " (not in a tracked pane)"}`, true);
+      if (wanted === undefined) return show(s);
+      db.setCategory(s.id, wanted);
+      return notify(`${core.displayName(s)} is now ${core.categoryOf(db.getSession(s.id) ?? s)}${wanted ? "" : " (from its work)"}`);
+    }
     case "park": {
       core.reconcile();
       const pane = process.env.TMUX_PANE;
@@ -497,9 +529,13 @@ async function main() {
           detach: { type: "boolean", short: "d" },
           cwd: { type: "string" },
           name: { type: "string" },
+          category: { type: "string" },
         },
       });
+      const category = v.category === undefined ? undefined : parseCategory(v.category);
+      if (category === null) return notify(`not a category: ${v.category} (${CATEGORIES.join(", ")})`, true);
       const r = core.newAgent({
+        category,
         prompt: positionals.join(" "),
         background: v.bg,
         cwd: v.cwd ?? (v.here ? undefined : CARRIOT_ROOT),

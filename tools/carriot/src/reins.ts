@@ -1,3 +1,4 @@
+import { nextCategory } from "./category";
 import * as core from "./core";
 import * as db from "./db";
 import { fuzzyScore } from "./fuzzy";
@@ -192,7 +193,7 @@ const selected = () => allRows().find((s) => s.id === selectedId) ?? null;
 
 /** Short identifying fields match fuzzily; status and reply text only match the words as typed. */
 function matchScore(s: SessionRow, query: string): number | null {
-  const names = [core.displayName(s), s.title, core.location(s), s.agent, s.tmux_target, s.cwd?.replace(/^\/Users\/[^/]+/, "~"), ...core.workRefs(s)]
+  const names = [core.displayName(s), s.title, core.categoryOf(s), core.location(s), s.agent, s.tmux_target, s.cwd?.replace(/^\/Users\/[^/]+/, "~"), ...core.workRefs(s)]
     .filter(Boolean)
     .join(" ");
   const text = [label(s), s.detail, s.last_prompt].filter(Boolean).join(" ");
@@ -418,7 +419,7 @@ function listLines(width: number, height: number): string[] {
       const badgeText = badge
         ? ` · ${badge.tone === "bad" ? A.red : badge.tone === "pending" ? A.amber : badge.tone === "good" ? A.green : A.grey}${link(pr!.url, badge.ref)}${badge.rest}${A.reset}${bg}${A.grey}`
         : "";
-      lines.push(fit(`${bg}${marker}${A.reset}${bg}   ${gone && s.end_reason === "lost" ? A.amber : idle ? A.grey : tint(s)}${status}${A.reset}${bg}${A.grey}${badgeText}${detail}`, width, bg));
+      lines.push(fit(`${bg}${marker}${A.reset}${bg}   ${gone && s.end_reason === "lost" ? A.amber : idle ? A.grey : tint(s)}${status}${A.reset}${bg}${A.grey} · ${core.categoryOf(s)}${badgeText}${detail}`, width, bg));
     }
   }
   if (sessions.length && !visibleSessions().length) lines.push("", ` ${A.grey}No sessions match /${filter}${A.reset}`, ` ${A.grey}esc clears the filter${A.reset}`);
@@ -511,7 +512,7 @@ function detailLines(width: number, height: number): string[] {
     ended(s)
       ? `${A.bold}${core.displayName(s)}${A.reset}  ${s.end_reason === "lost" ? A.amber : A.grey}${A.bold}${endedLabel(s)}${A.reset} ${A.grey}${core.ago(s.ended_at ?? s.updated_at)} ago · enter resumes${A.reset}`
       : `${A.bold}${core.displayName(s)}${A.reset}  ${tint(s)}${A.bold}${label(s)}${A.reset} ${A.grey}for ${core.ago(s.state_since)}${A.reset}`,
-    `${A.grey}${[s.agent, (s.cwd ?? "").replace(/^\/Users\/[^/]+/, "~"), s.tmux_target, s.mode && s.mode !== "default" ? `mode ${s.mode}` : null, s.id.slice(0, 8)].filter(Boolean).join(" · ")}${A.reset}`,
+    `${A.grey}${[s.agent, core.categoryOf(s), (s.cwd ?? "").replace(/^\/Users\/[^/]+/, "~"), s.tmux_target, s.mode && s.mode !== "default" ? `mode ${s.mode}` : null, s.id.slice(0, 8)].filter(Boolean).join(" · ")}${A.reset}`,
     ...workLines(s),
     TABS.map((t, i) => {
       const on = available(s, t);
@@ -575,7 +576,7 @@ function footer(width: number): string {
   if (flash && flash.until > Date.now()) return fit(` ${A.bold}${flash.text}${A.reset}`, width);
   const keys = [
     ["j/k ^n/^p", "move"], ["/", "find"], ["s", "sort"], ["enter", "open"], ["n", "next waiting"], ["1-5", "tabs"], ["J/K ^d/^u", "scroll"],
-    ["r", "reply"], ["p", "park"], ["a", "new"], ["x", "close"], ["?", "ask"], ["b", "report"], ["w", "write-up"], ["S", "scout pane"], ["R", "resume lost"], ["o", "web"], ["q", "quit"],
+    ["r", "reply"], ["p", "park"], ["t", "retag"], ["a", "new"], ["x", "close"], ["?", "ask"], ["b", "report"], ["w", "write-up"], ["S", "scout pane"], ["R", "resume lost"], ["o", "web"], ["q", "quit"],
   ];
   return fit(` ${keys.map(([k, v]) => `${A.bold}${k}${A.reset} ${A.grey}${v}${A.reset}`).join("  ")}`, width);
 }
@@ -793,6 +794,14 @@ function onKey(key: string) {
       if (selected() && ended(selected()!)) return say("That session has already ended.");
       confirmClose = selected()?.id ?? null;
       return;
+    case "t": {
+      const s = selected();
+      if (!s) return;
+      const next = nextCategory(core.categoryOf(s));
+      db.setCategory(s.id, next);
+      refresh(true);
+      return say(`${core.displayName(s)} is now ${next}`);
+    }
     case "?":
       asking = { text: "", all: !selected() };
       return;

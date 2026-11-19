@@ -1,5 +1,6 @@
 import { rmSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { DATADOG_MONITOR, type Category } from "./category";
 import * as core from "./core";
 import * as db from "./db";
 import { fuzzyScore } from "./fuzzy";
@@ -27,6 +28,7 @@ export interface Entry {
   branch: string | null;
   repo: string | null;
   pr: PrStatus | null;
+  category: Category;
   /** PR links in the session's latest messages: not tracked, but searchable. */
   mentioned: string[];
 }
@@ -64,7 +66,7 @@ export interface AlertRef {
 
 /** A Datadog monitor from a link to it (anywhere in the text), the way alert notifications link it. */
 export function parseAlert(text: string): AlertRef | null {
-  const m = text.match(/https:\/\/(?:[\w-]+\.)*(?:datadoghq\.(?:com|eu)|ddog-gov\.com)\/monitors(?:\/|#)(\d+)[^\s<>|)"']*/);
+  const m = text.match(DATADOG_MONITOR);
   return m ? { id: m[1], url: m[0].replace(/[.,;:!?]+$/, "") } : null;
 }
 
@@ -101,6 +103,7 @@ function entryOf(s: SessionRow): Entry {
     branch: w?.branch ?? null,
     repo: repoName(w?.repo ?? null),
     pr,
+    category: core.categoryOf(s),
     mentioned: prMentions(s.last_message, s.last_prompt, s.detail),
   };
 }
@@ -119,6 +122,7 @@ export function score(e: Entry, query: string): number | null {
     e.ticket,
     e.pr ? `${prRef(e.pr)} #${e.pr.number}` : null,
     ...e.mentioned,
+    e.category,
     e.repo,
     e.branch,
     folder,
@@ -151,8 +155,9 @@ export function toItem(e: Entry): AlfredItem {
   const status = ended
     ? `${s.end_reason === "lost" ? "lost" : "ended"} ${core.ago(s.ended_at ?? s.updated_at)} ago · enter resumes`
     : [label(s), core.ago(isStale(s) ? s.updated_at : s.state_since), core.location(s)].filter(Boolean).join(" ");
+  const kind = e.category;
   const ticket = e.ticket ? `${e.ticket}${e.ticketTitle ? ` ${e.ticketTitle}` : ""}` : null;
-  const subtitle = [status, ticket, pr ? prBadge(pr).text : null, ticket || pr ? null : (s.detail ?? "").replace(/\s+/g, " ").slice(0, 80)]
+  const subtitle = [status, kind, ticket, pr ? prBadge(pr).text : null, ticket || pr ? null : (s.detail ?? "").replace(/\s+/g, " ").slice(0, 80)]
     .filter(Boolean)
     .join(" · ");
   return {
@@ -260,8 +265,8 @@ function openSession(id: string): string {
 }
 
 /** Starts an agent in the hub with `prompt`, in the carriot tmux session, and brings it to the front. */
-function startSession(prompt: string, name: string, hub: string): string {
-  const r = core.newAgent({ prompt, cwd: hub, name, skipPermissions: true, pin: tmux.HOME_SESSION });
+function startSession(prompt: string, name: string, hub: string, category?: Category): string {
+  const r = core.newAgent({ prompt, cwd: hub, name, skipPermissions: true, pin: tmux.HOME_SESSION, category });
   if (!r.ok) return r.message;
   if (r.pane) tmux.jump(r.pane, true);
   return `started ${name}`;
@@ -287,15 +292,15 @@ export function go(arg: string, hub: string, bin = "carriot"): string {
       return openSession(value);
     case "new": {
       const t = parseTicket(value);
-      return t ? startSession(`/carriot:new ${t.id}`, t.id.toLowerCase(), hub) : `not a ticket: ${value}`;
+      return t ? startSession(`/carriot:new ${t.id}`, t.id.toLowerCase(), hub, "dev") : `not a ticket: ${value}`;
     }
     case "review": {
       const p = parsePr(value);
-      return p ? startSession(`/review-pr ${p.ref}`, `review-${p.repo}-${p.number}`.toLowerCase(), hub) : `not a PR: ${value}`;
+      return p ? startSession(`/review-pr ${p.ref}`, `review-${p.repo}-${p.number}`.toLowerCase(), hub, "review") : `not a PR: ${value}`;
     }
     case "alert": {
       const a = parseAlert(value);
-      return a ? startSession(alertPrompt(a), `alert-${a.id}`, hub) : `not a Datadog monitor link: ${value}`;
+      return a ? startSession(alertPrompt(a), `alert-${a.id}`, hub, "alert") : `not a Datadog monitor link: ${value}`;
     }
     case "scratch": {
       const name = sessionName(value);

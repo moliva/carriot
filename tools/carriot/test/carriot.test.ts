@@ -614,13 +614,102 @@ describe("spawner note", () => {
   });
 });
 
+describe("session categories", () => {
+  const cat = require("../src/category") as typeof import("../src/category");
+  const alfred = require("../src/alfred") as typeof import("../src/alfred");
+  const apply = (id: string, over: Record<string, unknown> = {}) => {
+    db.apply({ agent: "claude", sessionId: id, state: "waiting", ...over });
+    return db.getSession(id)!;
+  };
+
+  test("names and common synonyms parse; anything else does not", () => {
+    expect(cat.CATEGORIES).toEqual(["dev", "review", "alert", "misc"]);
+    expect(cat.parseCategory(" Review ")).toBe("review");
+    expect(cat.parseCategory("implementation")).toBe("dev");
+    expect(cat.parseCategory("impl")).toBe("dev");
+    expect(cat.parseCategory("other")).toBe("misc");
+    expect(cat.parseCategory("bogus")).toBeNull();
+    expect(cat.parseCategory("")).toBeNull();
+    expect(cat.parseCategory(undefined)).toBeNull();
+  });
+
+  test("the first prompt gives away a review, a ticket start or an alert, and nothing else", () => {
+    expect(cat.categoryFromPrompt("/review-pr https://github.com/acme/api/pull/9")).toBe("review");
+    expect(cat.categoryFromPrompt("/review-queue https://github.com/pulls?q=x")).toBe("review");
+    expect(cat.categoryFromPrompt("/carriot:new ABC-12\n\nscope: the api only")).toBe("dev");
+    expect(cat.categoryFromPrompt("/carriot:new fix the thing")).toBeNull();
+    expect(cat.categoryFromPrompt("Investigate this Datadog alert: https://app.datadoghq.com/monitors/42?group=a")).toBe("alert");
+    expect(cat.categoryFromPrompt("is https://app.datadoghq.com/dashboard/x slow?")).toBeNull();
+    expect(cat.categoryFromPrompt("please /review-pr this")).toBeNull();
+    expect(cat.categoryFromPrompt("/multi-review")).toBeNull();
+    expect(cat.categoryFromPrompt("")).toBeNull();
+    expect(cat.categoryFromPrompt(undefined)).toBeNull();
+  });
+
+  test("the prompt cs gives an alert session is recognised as one", () => {
+    expect(cat.categoryFromPrompt(alfred.alertPrompt({ id: "42", url: "https://app.datadoghq.com/monitors/42?group=a" }))).toBe("alert");
+  });
+
+  test("the adapter reports CARRIOT_CATEGORY and what the prompt says", () => {
+    const prompt = { session_id: "cat-adapt", hook_event_name: "UserPromptSubmit", prompt: "/review-pr api#9" };
+    expect(adapt(prompt, { CARRIOT_CATEGORY: "alert" }).event).toMatchObject({ category: "alert", promptCategory: "review" });
+    expect(adapt(prompt, { CARRIOT_CATEGORY: "bogus" }).event?.category).toBeUndefined();
+    expect(adapt(prompt, { CARRIOT_CATEGORY: "" }).event?.category).toBeUndefined();
+    expect(adapt({ session_id: "cat-adapt", hook_event_name: "SessionStart" }, {}).event?.promptCategory).toBeUndefined();
+  });
+
+  test("what a session was started for sticks, whatever the first prompt says", () => {
+    expect(apply("cat-1", { category: "alert" }).category).toBe("alert");
+    expect(apply("cat-1", { state: "working", prompt: "/review-pr x", promptCategory: "review" }).category).toBe("alert");
+  });
+
+  test("only the first prompt can tag a session, and only once", () => {
+    expect(apply("cat-2").category).toBeNull();
+    expect(apply("cat-2", { state: "working", prompt: "/review-pr x", promptCategory: "review" }).category).toBe("review");
+    expect(apply("cat-2", { state: "working", prompt: "/carriot:new ABC-1", promptCategory: "dev" }).category).toBe("review");
+    apply("cat-3", { state: "working", prompt: "what is this repo?" });
+    expect(apply("cat-3", { state: "working", prompt: "/review-pr x", promptCategory: "review" }).category).toBeNull();
+  });
+
+  test("tagging by hand replaces the category, and clearing lets it follow the work again", () => {
+    apply("cat-4", { category: "alert" });
+    db.setCategory("cat-4", "review");
+    expect(core.categoryOf(db.getSession("cat-4")!)).toBe("review");
+    db.setCategory("cat-4", null);
+    expect(core.categoryOf(db.getSession("cat-4")!)).toBe("misc");
+  });
+
+  test("untagged, a review folder is a review, a ticket is dev work, and anything else is misc", () => {
+    expect(core.categoryOf(apply("cat-5", { cwd: "/hub/sessions/review-api#9/api" }))).toBe("review");
+    const dev = apply("cat-6", { cwd: "/hub" });
+    expect(core.categoryOf(dev)).toBe("misc");
+    db.putWork({ session_id: "cat-6", repo: "acme/api", branch: "me/abc-1-x", ticket: "ABC-1", pr: null });
+    expect(core.categoryOf(dev)).toBe("dev");
+    expect(core.categoryOf(apply("cat-7", { cwd: "/hub/sessions/review-api#9/api", category: "dev" }))).toBe("dev");
+  });
+
+  test("retagging cycles through every category and comes back", () => {
+    let c: import("../src/category").Category = "dev";
+    const seen: string[] = [c];
+    for (let i = 0; i < cat.CATEGORIES.length; i++) seen.push((c = cat.nextCategory(c)));
+    expect(seen).toEqual(["dev", "review", "alert", "misc", "dev"]);
+  });
+});
+
 describe("alfred workflow", () => {
   const alfred = require("../src/alfred") as typeof import("../src/alfred");
   const session = (over: Record<string, unknown> = {}) =>
     ({ id: "id-1", agent: "claude", name: "drift-fix", title: null, cwd: "/hub/sessions/ABC-12/api", state: "waiting", mode: null, detail: null, last_prompt: null, last_message: null, started_at: 0, updated_at: Date.now(), state_since: Date.now() - 120_000, ended_at: null, bg: 0, end_reason: null, project_dir: null, tmux_server: null, tmux_target: "main:1", attention: null, attention_since: null, ...over }) as any;
   const pr = { repo: "acme/api", number: 321, url: "https://github.com/acme/api/pull/321", title: "fix(drift): route alerts by owner", state: "OPEN", draft: false, checks: { failed: 0, pending: 0, passed: 3, total: 3 }, review: "APPROVED", activity: 0 } as any;
   const entry = (over: Record<string, unknown> = {}) => ({
-    s: session(), ticket: "ABC-12", ticketTitle: "Route drift alerts", ticketStatus: "In Progress", ticketUrl: "https://linear.app/acme/issue/ABC-12", branch: "me/abc-12-drift", repo: "api", pr, mentioned: [], ...over,
+    s: session(), ticket: "ABC-12", ticketTitle: "Route drift alerts", ticketStatus: "In Progress", ticketUrl: "https://linear.app/acme/issue/ABC-12", branch: "me/abc-12-drift", repo: "api", pr, category: "dev" as import("../src/category").Category, mentioned: [], ...over,
+  });
+
+  test("a row says what kind of work the session is, and the category is searchable", () => {
+    expect(alfred.toItem(entry({ category: "review" })).subtitle).toContain("your turn 2m · review · ABC-12");
+    const entries = [entry({ category: "review", ticketTitle: "Route drift", pr: null }), entry({ s: session({ id: "id-2", name: "other", cwd: "/hub" }), category: "alert", ticket: null, ticketTitle: null, branch: null, repo: null, pr: null })];
+    expect(alfred.search(entries, "alert").map((e) => e.s.id)).toEqual(["id-2"]);
+    expect(alfred.search(entries, "review").map((e) => e.s.id)).toEqual(["id-1"]);
   });
 
   test("a ticket is read from a Linear link or a bare id, nothing else", () => {

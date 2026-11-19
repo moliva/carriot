@@ -76,6 +76,27 @@ Each session row shows a state dot (🔴 needs you, 🟡 your turn, 🟢 working
 
 The terminal brought forward is `CARRIOT_TERMINAL_APP` (default WezTerm). Ticket titles in the list come from Linear when a key is configured (see below). Jumping and starting need the tmux server running.
 
+## Categories
+
+Every session has a category, a tag for what kind of work it is:
+
+| Category | For |
+|---|---|
+| `dev` | normal development work: a ticket or a feature, up to its PR |
+| `review` | PR reviews, one at a time or a queue of them |
+| `alert` | investigating a monitor or an alert |
+| `misc` | everything else: planning, debugging a Slack thread, carriot itself |
+
+Reins shows it on each row after the state (`your turn · review · api#9 ✓`) and in the detail header, the dashboard as a chip, `carriot ls` as a column, and Alfred after the state in the subtitle. Each one also finds sessions by it: `/` in reins, the picker, and `cs review`.
+
+**Where it comes from**, first match wins:
+
+1. What it was started for. `cs` sets `dev` for *Start a session for ABC-12*, `review` for *Review repo#123* and `alert` for *Investigate Datadog monitor 123*; `carriot new --category C` does the same for agents that start sessions. It travels as `CARRIOT_CATEGORY` in the new agent's environment, which its hooks read, so it also covers `/clear`.
+2. The first prompt of the session, when nothing was set: `/review-pr` or `/review-queue` is `review`, `/carriot:new <TICKET>` is `dev`, and a Datadog monitor link is `alert`. Only the first prompt counts, so a session that later runs `/review-pr` stays what it was.
+3. What the work says, worked out each time rather than stored: a `sessions/review-<repo>#<n>/` folder is `review`, a session with a ticket is `dev`, anything else is `misc`.
+
+**Changing it:** `t` in reins cycles the selected session through the four, or `carriot tag [name|id] <category>` sets it (no name means this pane; `--clear` goes back to what the work says; `carriot tag <name>` shows it). A category set by hand replaces whatever was there. The words `implementation` and `impl` also work for `dev`.
+
 ## Tickets and PRs
 
 Each session shows what it is working on: the ticket (from its `sessions/<TICKET>/` folder or a Linear-style branch), the branch, and the PR with its CI and review state. Reins puts a badge on each row (`#9936 ✓ approved`, `#9668 ✗`, `#9939 … changes`) and a ticket and PR line in the detail pane; the dashboard shows the same, and `/` finds sessions by ticket or PR reference (`ABC-12`, `api#321`). The picker (`prefix F`, `cmd+g`) shows the same ticket and PR reference on each row, so it finds them too. Review sessions (`sessions/review-<repo>#<n>/`) show the PR under review. When an agent has wandered back to the hub root, the last session folder in its conversation is used.
