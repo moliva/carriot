@@ -715,6 +715,38 @@ describe("session categories", () => {
   });
 });
 
+describe("reins list groups", () => {
+  const { listGroups } = require("../src/reins") as typeof import("../src/reins");
+  const row = (id: string, over: Record<string, unknown> = {}) =>
+    ({ id, agent: "claude", name: id, title: null, cwd: "/hub", state: "waiting", mode: null, attention: null, category: null, updated_at: Date.now(), ended_at: null, end_reason: null, ...over }) as any;
+  const DAY = 24 * 3600_000;
+  const rows = [
+    row("blocked", { state: "needs_approval" }),
+    row("turn", { state: "waiting" }),
+    row("busy", { state: "working" }),
+    row("planning", { state: "working", mode: "plan" }),
+    row("idle-waiting", { state: "waiting", updated_at: Date.now() - 3 * DAY }),
+    row("idle-working", { state: "working", updated_at: Date.now() - 3 * DAY }),
+    row("lost", { state: "ended", end_reason: "lost", ended_at: Date.now() - 3600_000 }),
+  ];
+
+  test("every session lands in exactly one group, and idle ones are not dropped", () => {
+    const groups = listGroups(rows);
+    expect(groups.flatMap((g) => g.items.map((s: any) => s.id)).sort()).toEqual(rows.map((r) => r.id).sort());
+  });
+
+  test("by state: needs you, your turn, working and planning, idle, then lost", () => {
+    const byTitle = Object.fromEntries(listGroups(rows).map((g) => [g.title.split(" · ")[0], g.items.map((s: any) => s.id)]));
+    expect(byTitle).toEqual({
+      "NEEDS YOU": ["blocked"],
+      "YOUR TURN": ["turn"],
+      WORKING: ["busy", "planning"],
+      IDLE: ["idle-waiting", "idle-working"],
+      LOST: ["lost"],
+    });
+  });
+});
+
 describe("alfred workflow", () => {
   const alfred = require("../src/alfred") as typeof import("../src/alfred");
   const session = (over: Record<string, unknown> = {}) =>

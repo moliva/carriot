@@ -220,7 +220,7 @@ const kindRows = () => (kindFilter ? allRows().filter((s) => catOf(s) === kindFi
  * The list as drawn: `list` split into titled groups, by state or by category. Ended sessions are their own group
  * last either way, and idle ones sort to the bottom of their group (the sessions already come in that order).
  */
-function listGroups(list: SessionRow[]): { title: string; items: SessionRow[] }[] {
+export function listGroups(list: SessionRow[]): { title: string; items: SessionRow[] }[] {
   const live = list.filter((s) => !ended(s));
   const lostOrEnded = {
     title: showWeekOfEnded
@@ -241,7 +241,8 @@ function listGroups(list: SessionRow[]): { title: string; items: SessionRow[] }[
     { title: "NEEDS YOU", items: active((s) => kind(s) === "blocked") },
     { title: "YOUR TURN", items: active((s) => kind(s) === "waiting") },
     { title: "WORKING", items: active((s) => kind(s) === "working" || kind(s) === "planning") },
-    { title: `IDLE · no activity for ${idleLabel()}+`, items: live.filter(isStale) },
+    // Not `.filter(isStale)`: filter passes the index as isStale's second argument (`now`), so nothing would be idle.
+    { title: `IDLE · no activity for ${idleLabel()}+`, items: live.filter((s) => isStale(s)) },
     lostOrEnded,
   ];
 }
