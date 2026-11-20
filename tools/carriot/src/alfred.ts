@@ -12,7 +12,7 @@ import { linearLinks, prBadge, prRef, repoName, type PrStatus } from "./work";
 export interface AlfredItem {
   title: string;
   subtitle?: string;
-  /** What the workflow's action receives: `session:<id>`, `reins:`, `new:<TICKET>`, `review:<PR>`, `alert:<url>`, `scratch:<name>` or `open:<url>`. */
+  /** What the workflow's action receives: `session:<id>`, `reins:`, `new:<TICKET>`, `review:<PR>`, `alert:<url>`, `prompt:<text>` or `open:<url>`. */
   arg?: string;
   valid?: boolean;
   mods?: Record<string, { arg?: string; subtitle?: string; valid?: boolean }>;
@@ -198,17 +198,22 @@ function alertItem(a: AlertRef): AlfredItem {
   };
 }
 
-/** The name a typed query gives an empty session: lowercase words joined by hyphens; null when nothing is left. */
+/** Text as a session name: lowercase words joined by hyphens; null when nothing is left. */
 export function sessionName(text: string): string | null {
   const name = text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return name || null;
 }
 
-function scratchItem(name: string): AlfredItem {
+/** The name of a session started with `text` as its first prompt: its first three words; null when nothing is left. */
+export function promptName(text: string): string | null {
+  return sessionName(text.trim().split(/\s+/).slice(0, 3).join(" "));
+}
+
+function promptItem(text: string, name: string): AlfredItem {
   return {
     title: `Start a session named ${name}`,
-    subtitle: "an empty agent in the carriot hub, no prompt yet",
-    arg: `scratch:${name}`,
+    subtitle: "runs the text as its first prompt",
+    arg: `prompt:${text}`,
   };
 }
 
@@ -227,8 +232,8 @@ function reinsItem(entries: Entry[]): AlfredItem {
  * The list: reins first (when the query is empty or looks for it), then the sessions matching the query. A typed
  * ticket id or Linear link also offers a new session after the matches, and a PR reference or link offers a review
  * session, and a Datadog monitor link offers an investigation; a session already running for that ticket, PR or
- * monitor comes first, so enter goes back to it. Any other text also offers an empty session named after it, last,
- * so a name that matches nothing is one enter away.
+ * monitor comes first, so enter goes back to it. Any other text also offers a session that runs it as its first
+ * prompt, last, so a question that matches nothing is one enter away.
  */
 export function sessionItems(entries: Entry[], query: string): AlfredItem[] {
   const t = parseTicket(query);
@@ -242,8 +247,8 @@ export function sessionItems(entries: Entry[], query: string): AlfredItem[] {
   if (t) items.push(newItem(t.id, db.getTicket(t.id)?.title ?? null, "opens a new agent running /carriot:new"));
   if (p) items.push(reviewItem(p));
   if (a) items.push(alertItem(a));
-  const name = t || p || a ? null : sessionName(query);
-  if (name) items.push(scratchItem(name));
+  const name = t || p || a ? null : promptName(query);
+  if (name) items.push(promptItem(query.trim(), name));
   return items.length ? items : [{ title: "No session matches", subtitle: "Search by name, ticket, PR number, repo or branch", valid: false }];
 }
 
@@ -302,9 +307,9 @@ export function go(arg: string, hub: string, bin = "carriot"): string {
       const a = parseAlert(value);
       return a ? startSession(alertPrompt(a), `alert-${a.id}`, hub, "alert") : `not a Datadog monitor link: ${value}`;
     }
-    case "scratch": {
-      const name = sessionName(value);
-      return name ? startSession("", name, hub) : `not a session name: ${value}`;
+    case "prompt": {
+      const name = promptName(value);
+      return name ? startSession(value.trim(), name, hub) : `not a session prompt: ${value}`;
     }
     case "open":
       if (!/^(https:\/\/|carriot:\/\/)/.test(value)) return "";

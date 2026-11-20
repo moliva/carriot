@@ -41,7 +41,7 @@ ${c.bold}STANDING SESSIONS${c.reset}  work you keep open all the time (review qu
 
 ${c.bold}ALFRED${c.reset}  carriot alfred install, then cs: jump to a session (⌘ PR, ⌥ ticket, ⌃ dashboard), open reins, or paste a
   ticket (ABC-12 / Linear link) to start a session on it, a PR (repo#123 / link) to start a /review-pr session, a Datadog
-  monitor link to start an alert investigation, or any other new name to start an empty session with that name
+  monitor link to start an alert investigation, or any other text to start a session whose first prompt it is
 
 ${c.bold}NOTIFICATIONS${c.reset}  when a session starts needing you and you are not looking at it; click jumps there
   CARRIOT_NOTIFY=blocked skips "your turn", =off silences them

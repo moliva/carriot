@@ -818,13 +818,13 @@ describe("alfred workflow", () => {
     expect(all[0].subtitle).toContain("1 session waiting on you");
     expect(all[0].mods?.ctrl.arg).toBe("open:carriot://open");
     expect(alfred.sessionItems([entry()], "rei")[0].arg).toBe("reins:");
-    expect(alfred.sessionItems([entry()], "drift").map((i) => i.arg)).toEqual(["session:id-1", "scratch:drift"]);
+    expect(alfred.sessionItems([entry()], "drift").map((i) => i.arg)).toEqual(["session:id-1", "prompt:drift"]);
   });
 
-  test("any other text offers an empty session named after it, last; a ticket or PR does not", () => {
-    expect(alfred.sessionItems([entry()], "nothing-like-it").map((i) => i.arg)).toEqual(["scratch:nothing-like-it"]);
-    expect(alfred.sessionItems([], "a-new-session-name")).toEqual([
-      { title: "Start a session named a-new-session-name", subtitle: "an empty agent in the carriot hub, no prompt yet", arg: "scratch:a-new-session-name" },
+  test("any other text offers a session that runs it as its first prompt, last; a ticket or PR does not", () => {
+    expect(alfred.sessionItems([entry()], "nothing-like-it").map((i) => i.arg)).toEqual(["prompt:nothing-like-it"]);
+    expect(alfred.sessionItems([], "Why does the drift monitor fire?")).toEqual([
+      { title: "Start a session named why-does-the", subtitle: "runs the text as its first prompt", arg: "prompt:Why does the drift monitor fire?" },
     ]);
     expect(alfred.sessionItems([], "!!!").map((i) => i.valid)).toEqual([false]);
   });
@@ -889,7 +889,7 @@ describe("alfred workflow", () => {
     expect(alfred.go("whatever", "/hub")).toBe("");
     expect(alfred.go("new:not a ticket", "/hub")).toContain("not a ticket");
     expect(alfred.go("review:not a pr", "/hub")).toContain("not a PR");
-    expect(alfred.go("scratch:---", "/hub")).toContain("not a session name");
+    expect(alfred.go("prompt:---", "/hub")).toContain("not a session prompt");
   });
 });
 
