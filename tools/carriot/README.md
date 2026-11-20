@@ -180,7 +180,7 @@ Jumping to either (`enter`, `carriot jump`, `carriot next`) reconnects first: a 
 
 Hooks live in `carriot/.claude/settings.json`. All except the Bash PR gate run with `async: true`, so they never slow the agent. `hook-pr-gate` exits in bash unless the command contains `gh pr create`.
 
-tmux: everything lives in `carriot.tmux`. It appends the state dot to your existing window formats and binds `prefix O` (dashboard on the current session), `prefix T` (reins), `prefix F` (picker popup), `prefix b` (jump to the session waiting longest), `prefix P` (park), `prefix A` (new agent), `prefix X` (close agent and pane, asks first), `prefix R` (resume lost sessions, asks first) and `prefix S` (scout pane from anywhere), `prefix Q` / `prefix W` (standing sessions) and `prefix G` (cheatsheet; also `carriot help`). Load it at the end of `~/.tmux.conf`:
+tmux: everything lives in `carriot.tmux`. It appends the state dot to your existing window formats and binds `prefix O` (dashboard on the current session), `prefix T` (reins), `prefix F` (picker popup), `prefix b` (jump to the session waiting longest), `prefix P` (park), `prefix A` (new agent), `prefix X` (close agent and pane, asks first), `prefix R` (resume lost sessions, asks first), `prefix S` (scout pane from anywhere), `prefix Q` / `prefix W` (review queue / monitor overview, see Standing sessions) and `prefix G` (cheatsheet; also `carriot help`). Load it at the end of `~/.tmux.conf`:
 
 ```tmux
 source-file -q ~/carriot/tools/carriot/carriot.tmux
@@ -188,7 +188,7 @@ source-file -q ~/carriot/tools/carriot/carriot.tmux
 
 To turn it off, comment that line out and restart tmux. A plain reload restores your formats but keeps the bindings until the server restarts.
 
-WezTerm: `carriot.wezterm.lua` maps CMD shortcuts onto those tmux bindings (cmd+shift+t new agent, cmd+b next waiting, cmd+shift+a reins, cmd+g picker, cmd+shift+p park, cmd+shift+w close, cmd+/ cheatsheet, cmd+shift+o dashboard). Load it at the end of `wezterm.lua`, passing the dotfiles `keys` helper:
+WezTerm: `carriot.wezterm.lua` maps CMD shortcuts onto those tmux bindings (cmd+shift+t new agent, cmd+b next waiting, cmd+shift+a reins, cmd+g picker, cmd+shift+p park, cmd+shift+w close, cmd+/ cheatsheet, cmd+shift+o dashboard, cmd+shift+s scout, cmd+shift+r review queue, cmd+shift+m monitor overview). Load it at the end of `wezterm.lua`, passing the dotfiles `keys` helper:
 
 ```lua
 local carriot_ok, carriot = pcall(dofile, os.getenv("HOME") .. "/carriot/tools/carriot/carriot.wezterm.lua")
