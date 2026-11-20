@@ -62,6 +62,7 @@ ${c.bold}TMUX${c.reset}  ${c.dim}(prefix = C-a)${c.reset}
   prefix P          park the current agent (it keeps running out of sight)
   prefix X          close the current agent and its pane (asks first)
   prefix R          resume every session lost in the last day (asks first)
+  prefix S          scout pane from anywhere (reins starts if needed); again from the scout: go back
   prefix Q          review-queue standing session (open or focus; again: go back)
   prefix W          monitor-overview standing session (same)
   prefix G          this cheatsheet
@@ -72,6 +73,7 @@ ${c.bold}WEZTERM${c.reset}  ${c.dim}(no prefix needed)${c.reset}
   cmd+shift+p       park the current agent    cmd+shift+o   web dashboard
   cmd+shift+w       close the current agent   cmd+/         this cheatsheet
   cmd+shift+r       review queue              cmd+shift+m   monitor overview
+  cmd+shift+s       scout (again: go back)
 
 ${c.bold}REINS${c.reset}  ${c.dim}carriot reins${c.reset}
   j k  ↑ ↓  ^n ^p   move between sessions        g G   first / last
@@ -117,6 +119,7 @@ ${c.bold}COMMANDS${c.reset}
             [--category C]    only that category
   carriot tag [name|id] [C]     show or set a session's category: dev, review, alert, misc (no name: this pane;
                               --clear lets it follow its work again)
+  carriot scout                 open or focus the scout pane in reins from anywhere (from the scout: go back)
   carriot standing [name]       open or focus a standing session (none: list them and whether they run)
   carriot next                  jump to the session that has waited the longest
   carriot jump <name|id>        switch tmux to a session (unparks or attaches first)
@@ -562,6 +565,19 @@ async function main() {
         return console.log(`${r.message}${r.pane ? ` (pane ${r.pane})` : ""}`);
       }
       return notify(r.message, !r.ok);
+    }
+    case "scout": {
+      // From anywhere: reins (started when needed) with the scout pane beside it, opened and focused. From the scout
+      // pane itself the same key goes back to the session you came from.
+      const pane = process.env.TMUX_PANE;
+      if (pane && tmux.isScout(pane)) return tmux.switchBack();
+      tmux.ensureReins(`${self()} reins`);
+      const reinsPane = tmux.reinsPane();
+      if (!reinsPane) return notify("could not start reins", true);
+      const { openPane } = await import("./scout");
+      const message = openPane(reinsPane, null);
+      tmux.showReins();
+      return message ? notify(message) : undefined;
     }
     case "standing": {
       const standing = await import("./standing");

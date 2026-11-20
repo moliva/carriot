@@ -40,3 +40,6 @@ bind O run-shell "TMUX_PANE=#{pane_id} ~/carriot/bin/carriot open"
 # Opens one that is not running, focuses one that is, and from inside it goes back. Defined in ~/.config/carriot/standing.json.
 bind Q run-shell "TMUX_PANE=#{pane_id} ~/carriot/bin/carriot standing review-queue"
 bind W run-shell "TMUX_PANE=#{pane_id} ~/carriot/bin/carriot standing monitor-overview"
+
+# prefix S: the scout pane from anywhere (starts reins if needed); pressed from the scout itself it goes back.
+bind S run-shell "TMUX_PANE=#{pane_id} ~/carriot/bin/carriot scout"

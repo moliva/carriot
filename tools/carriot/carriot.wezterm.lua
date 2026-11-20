@@ -69,6 +69,8 @@ function M.apply(config, keys)
     -- review queue and monitor overview: open the standing session, or focus it (again: go back)
     { mods = "CMD|SHIFT", key = "r", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "q" }) },
     { mods = "CMD|SHIFT", key = "m", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "w" }) },
+    -- scout pane from anywhere (again: go back)
+    { mods = "CMD|SHIFT", key = "s", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "s" }) },
   }
   config.keys = config.keys or {}
   for _, binding in ipairs(bindings) do

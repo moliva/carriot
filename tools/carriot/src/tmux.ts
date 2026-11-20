@@ -370,7 +370,22 @@ export function toggleReins(command: string): "in" | "out" {
     switchBack();
     return "out";
   }
-  if (tmux("has-session", "-t", `=${REINS}`) === null) tmux("new-session", "-d", "-s", REINS, "-n", "reins", command);
+  ensureReins(command);
   tmux("switch-client", "-t", `=${REINS}`);
   return "in";
+}
+
+/** Starts the reins session with `command` when it is not running. */
+export function ensureReins(command: string) {
+  if (tmux("has-session", "-t", `=${REINS}`) === null) tmux("new-session", "-d", "-s", REINS, "-n", "reins", command);
+}
+
+/** The pane running reins itself (not the scout pane beside it); null when reins is not running. */
+export function reinsPane(): string | null {
+  const out = tmux("list-panes", "-s", "-t", `=${REINS}`, "-F", "#{pane_id}\t#{@carriot_scout}");
+  return out?.split("\n").map((l) => l.split("\t")).find(([, mark]) => mark !== "1")?.[0] ?? null;
+}
+
+export function showReins() {
+  tmux("switch-client", "-t", `=${REINS}`);
 }
