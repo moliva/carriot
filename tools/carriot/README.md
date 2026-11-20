@@ -76,6 +76,30 @@ Each session row shows a state dot (🔴 needs you, 🟡 your turn, 🟢 working
 
 The terminal brought forward is `CARRIOT_TERMINAL_APP` (default WezTerm). Ticket titles in the list come from Linear when a key is configured (see below). Jumping and starting need the tmux server running.
 
+## Standing sessions
+
+Work you keep open all the time, such as a review queue or a monitor overview, gets a session of its own that one key opens or focuses. They live in their own tmux session (`carriot-standing`, `CARRIOT_STANDING_SESSION` overrides the name), apart from the ones you check on all day.
+
+| Key | Does |
+|---|---|
+| `prefix Q` / cmd+shift+r | the `review-queue` session |
+| `prefix W` / cmd+shift+m | the `monitor-overview` session |
+
+Pressing the key starts the session when it is not running, focuses it when it is, and from inside it goes back to the session you came from (like reins). A session whose agent exited and left a shell is replaced by a fresh one. A window is found by a mark carriot sets on it, so the agent renaming its window does not lose it; after a tmux restore, which drops the mark, it is found by its window name.
+
+**Definition:** a local, untracked file, `~/.config/carriot/standing.json` (`CARRIOT_STANDING_CONFIG` overrides the path), because the prompts hold search links and team names. Each key is a session name, with its first `prompt`, an optional `category` and an optional `cwd` (default: the carriot root, so the hooks apply):
+
+```json
+{
+  "review-queue": { "category": "review", "prompt": "Run /review-queue on <search url>. Once the queue is empty, recheck in ~15 minutes." },
+  "monitor-overview": { "category": "alert", "prompt": "Review the triggering, unmuted monitors at <url>, sorted by priority; recheck every ~15 minutes." }
+}
+```
+
+Rechecking is the agent's job, written into the prompt (carriot does not schedule anything). The sessions start with permission prompts skipped, like `carriot new`, and without the "started by" note, since they report to nobody in particular.
+
+`carriot standing` lists the defined sessions and whether each runs; `carriot standing <name>` opens or focuses one. Other names work from the command line; only the two above have keys.
+
 ## Categories
 
 Every session has a category, a tag for what kind of work it is:
@@ -196,6 +220,8 @@ Optional: `brew install glow git-delta` for nicer plan and diff rendering in the
 | `CARRIOT_AGENT_CONTEXT_TOKENS` | `1000000` with `openrouter/auto` | context window new agents assume (`CLAUDE_CODE_MAX_CONTEXT_TOKENS`); Claude Code doesn't know the auto router's window. Empty leaves Claude Code's guess |
 | `CARRIOT_SCOUT_MODEL` | `deepseek/deepseek-v4.1-flash` | model for the scout; the default needs an OpenRouter `ANTHROPIC_BASE_URL`, otherwise use e.g. `haiku` |
 | `CARRIOT_SCOUT_WIDTH` | `40%` | width of the scout pane |
+| `CARRIOT_STANDING_SESSION` | `carriot-standing` | tmux session for standing sessions |
+| `CARRIOT_STANDING_CONFIG` | `~/.config/carriot/standing.json` | where standing sessions are defined |
 | `CARRIOT_BRIEF_AFTER_MINUTES` | `15` | time away from reins after which coming back opens a brief (the first visit of a day always does) |
 
 Hook failures are appended to `errors.log` next to the database and never affect the agent.

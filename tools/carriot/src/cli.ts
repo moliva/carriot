@@ -35,6 +35,10 @@ ${c.bold}CATEGORIES${c.reset}  every session is dev, review, alert or misc (set 
 ${c.bold}TICKETS AND PRS${c.reset}  each session shows its ticket and PR (#123 ✓/…/✗ CI, changes/approved); the watcher checks
   every 2 min and turns a session red when CI fails, changes are requested or new comments land (your next prompt clears it)
 
+${c.bold}STANDING SESSIONS${c.reset}  work you keep open all the time (review queue, monitor overview), in a tmux session of their own
+  (carriot-standing): prefix Q / cmd+shift+r the review queue, prefix W / cmd+shift+m the monitor overview. Starts it when
+  it is not running, focuses it when it is, and from inside it goes back. Defined in ~/.config/carriot/standing.json
+
 ${c.bold}ALFRED${c.reset}  carriot alfred install, then cs: jump to a session (⌘ PR, ⌥ ticket, ⌃ dashboard), open reins, or paste a
   ticket (ABC-12 / Linear link) to start a session on it, a PR (repo#123 / link) to start a /review-pr session, a Datadog
   monitor link to start an alert investigation, or any other new name to start an empty session with that name
@@ -58,6 +62,8 @@ ${c.bold}TMUX${c.reset}  ${c.dim}(prefix = C-a)${c.reset}
   prefix P          park the current agent (it keeps running out of sight)
   prefix X          close the current agent and its pane (asks first)
   prefix R          resume every session lost in the last day (asks first)
+  prefix Q          review-queue standing session (open or focus; again: go back)
+  prefix W          monitor-overview standing session (same)
   prefix G          this cheatsheet
 
 ${c.bold}WEZTERM${c.reset}  ${c.dim}(no prefix needed)${c.reset}
@@ -65,6 +71,7 @@ ${c.bold}WEZTERM${c.reset}  ${c.dim}(no prefix needed)${c.reset}
   cmd+shift+a       reins (again: go back)    cmd+g         picker popup
   cmd+shift+p       park the current agent    cmd+shift+o   web dashboard
   cmd+shift+w       close the current agent   cmd+/         this cheatsheet
+  cmd+shift+r       review queue              cmd+shift+m   monitor overview
 
 ${c.bold}REINS${c.reset}  ${c.dim}carriot reins${c.reset}
   j k  ↑ ↓  ^n ^p   move between sessions        g G   first / last
@@ -110,6 +117,7 @@ ${c.bold}COMMANDS${c.reset}
             [--category C]    only that category
   carriot tag [name|id] [C]     show or set a session's category: dev, review, alert, misc (no name: this pane;
                               --clear lets it follow its work again)
+  carriot standing [name]       open or focus a standing session (none: list them and whether they run)
   carriot next                  jump to the session that has waited the longest
   carriot jump <name|id>        switch tmux to a session (unparks or attaches first)
   carriot park [name|id]        move a session out of sight; it keeps running
@@ -554,6 +562,23 @@ async function main() {
         return console.log(`${r.message}${r.pane ? ` (pane ${r.pane})` : ""}`);
       }
       return notify(r.message, !r.ok);
+    }
+    case "standing": {
+      const standing = await import("./standing");
+      let defined;
+      try {
+        defined = standing.loadConfig();
+      } catch (err) {
+        return notify((err as Error).message, true);
+      }
+      if (!rest[0]) {
+        const where = { live: "running", dead: "ended", none: "not started" };
+        return console.log(defined.map((d) => `${d.name.padEnd(24)} ${where[standing.status(d.name).kind]}`).join("\n"));
+      }
+      const wanted = defined.find((d) => d.name === rest[0]);
+      if (!wanted) return notify(`no standing session '${rest[0]}' (defined: ${defined.map((d) => d.name).join(", ") || "none"})`, true);
+      const error = standing.open(wanted, CARRIOT_ROOT);
+      return error ? notify(error, true) : undefined;
     }
     case "app": {
       if (rest[0] !== "install") return notify("usage: carriot app install", true);

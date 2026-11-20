@@ -357,6 +357,8 @@ export function newAgent(opts: {
   pin?: string;
   /** What the session is for; its hooks read it from CARRIOT_CATEGORY. Without one, the first prompt or the work decides. */
   category?: Category;
+  /** Leave out the note naming the session that started this one (for sessions that report to nobody in particular). */
+  anonymous?: boolean;
 }): { ok: boolean; message: string; pane?: string } {
   const claude = Bun.which("claude") ?? "claude";
   const flags = ["--model", AGENT_MODEL, ...(opts.skipPermissions === false ? [] : ["--dangerously-skip-permissions"])];
@@ -373,7 +375,7 @@ export function newAgent(opts: {
     const out = `${p.stdout}${p.stderr}`.trim();
     return { ok: p.exitCode === 0, message: out || "Started in the background." };
   }
-  const spawner = process.env.TMUX_PANE ? db.liveSessions().find((s) => s.pane === process.env.TMUX_PANE) : undefined;
+  const spawner = process.env.TMUX_PANE && !opts.anonymous ? db.liveSessions().find((s) => s.pane === process.env.TMUX_PANE) : undefined;
   const brief = prompt ? withSpawnerNote(prompt, spawner ?? null) : prompt;
   const pane = tmux.newWindow({
     cwd: opts.cwd,

@@ -80,7 +80,7 @@ export function serverPid(): string | null {
   return tmux("display-message", "-p", "#{pid}") || null;
 }
 
-const SHELLS = new Set(["zsh", "bash", "fish", "sh", "-zsh", "-bash"]);
+export const SHELLS = new Set(["zsh", "bash", "fish", "sh", "-zsh", "-bash"]);
 
 /**
  * A window tmux-resurrect brought back after a restart: same name, a single pane sitting at a shell, not used by
@@ -108,8 +108,14 @@ export const REINS = process.env.CARRIOT_REINS_SESSION ?? "carriot-reins";
 /** The carriot session you work from: where the Alfred workflow puts the agents it starts. */
 export const HOME_SESSION = process.env.CARRIOT_HOME_SESSION ?? "carriot";
 
+/**
+ * Long-lived sessions you keep open apart from the rest (the review queue, the monitor overview) live in their own
+ * tmux session, so they stay out of the way of the sessions you check on all day.
+ */
+export const STANDING = process.env.CARRIOT_STANDING_SESSION ?? "carriot-standing";
+
 /** carriot's own sessions: nothing an agent needs (new windows, unparked ones) is ever placed in them. */
-const OWN = new Set([PARK, REINS]);
+const OWN = new Set([PARK, REINS, STANDING]);
 
 export const isParked = (target: string | null | undefined) => !!target && target.startsWith(`${PARK}:`);
 
@@ -320,6 +326,39 @@ export function focusPane(pane: string, text?: string): boolean {
   return !text || tmux("send-keys", "-t", pane, "-l", text) !== null;
 }
 
+/** Goes back to the tmux session the client was on before the current one. */
+export function switchBack() {
+  if (tmux("switch-client", "-l") === null) {
+    const other = fallbackSession();
+    if (other) tmux("switch-client", "-t", `=${other}`);
+  }
+}
+
+export interface StandingPane {
+  pane: string;
+  window: string;
+  /** Name of the standing session this window was opened for (@carriot_standing); empty after a tmux restore. */
+  mark: string;
+  command: string;
+}
+
+/** Every pane in the standing tmux session; empty when it does not exist. */
+export function standingPanes(): StandingPane[] {
+  const out = tmux("list-panes", "-s", "-t", `=${STANDING}`, "-F", "#{pane_id}\t#{window_name}\t#{@carriot_standing}\t#{pane_current_command}");
+  return (out ?? "")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [pane, window, mark, command] = line.split("\t");
+      return { pane, window, mark: mark ?? "", command: command ?? "" };
+    });
+}
+
+/** Marks a pane's window as the home of standing session `name`, so renaming the window does not lose it. */
+export function markStanding(pane: string, name: string) {
+  tmux("set-option", "-w", "-t", pane, "@carriot_standing", name);
+}
+
 /**
  * Toggles reins: from any session, switch to the reins session (starting it with `command` if needed); from reins,
  * switch back to the session you came from.
@@ -328,10 +367,7 @@ export function toggleReins(command: string): "in" | "out" {
   const pane = process.env.TMUX_PANE;
   const here = pane ? tmux("display-message", "-p", "-t", pane, "#{session_name}") : null;
   if (here === REINS) {
-    if (tmux("switch-client", "-l") === null) {
-      const other = fallbackSession();
-      if (other) tmux("switch-client", "-t", `=${other}`);
-    }
+    switchBack();
     return "out";
   }
   if (tmux("has-session", "-t", `=${REINS}`) === null) tmux("new-session", "-d", "-s", REINS, "-n", "reins", command);

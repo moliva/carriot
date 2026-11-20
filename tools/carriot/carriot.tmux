@@ -35,3 +35,8 @@ run-shell -b "$HOME/carriot/bin/carriot watch"
 
 # prefix O: open the dashboard (Carriot.app when installed) on the session in the current pane.
 bind O run-shell "TMUX_PANE=#{pane_id} ~/carriot/bin/carriot open"
+
+# prefix Q / prefix W: the standing sessions (review queue, monitor overview), each in the carriot-standing tmux session.
+# Opens one that is not running, focuses one that is, and from inside it goes back. Defined in ~/.config/carriot/standing.json.
+bind Q run-shell "TMUX_PANE=#{pane_id} ~/carriot/bin/carriot standing review-queue"
+bind W run-shell "TMUX_PANE=#{pane_id} ~/carriot/bin/carriot standing monitor-overview"

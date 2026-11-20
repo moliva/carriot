@@ -66,6 +66,9 @@ function M.apply(config, keys)
     { mods = "CMD", key = "/", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "g" }) },
     -- dashboard on the current session (goes through tmux so carriot knows which pane you are in)
     { mods = "CMD|SHIFT", key = "o", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "o" }) },
+    -- review queue and monitor overview: open the standing session, or focus it (again: go back)
+    { mods = "CMD|SHIFT", key = "r", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "q" }) },
+    { mods = "CMD|SHIFT", key = "m", action = keys.tmux_prefixed_key({ mods = "SHIFT", key = "w" }) },
   }
   config.keys = config.keys or {}
   for _, binding in ipairs(bindings) do

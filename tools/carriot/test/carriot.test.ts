@@ -14,6 +14,7 @@ const { fuzzyScore } = await import("../src/fuzzy");
 const work = await import("../src/work");
 const { shouldNotify, message } = await import("../src/notify");
 const { isStale, STALE_AFTER_MS } = await import("../src/types");
+const standing = await import("../src/standing");
 
 const env = { TMUX_PANE: undefined };
 const ev = (h: Record<string, unknown>) => adapt({ session_id: "s1", cwd: dir, permission_mode: "default", ...h }, env);
@@ -906,5 +907,48 @@ describe("picker and reins search refs", () => {
     const refs = core.workRefs({ id: "refs-1" } as any).join(" ");
     for (const q of ["abc-12", "api#321", "321", "#321"]) expect(fuzzyScore(q, refs)).not.toBeNull();
     expect(fuzzyScore("api#999", refs)).toBeNull();
+  });
+});
+
+describe("standing sessions", () => {
+  const pane = (p: string, window: string, mark = "", command = "node") => ({ pane: p, window, mark, command });
+
+  test("the config is an object keyed by name, with a prompt and an optional category", () => {
+    const list = standing.parseConfig(JSON.stringify({ queue: { prompt: " /review-queue https://example.test/q ", category: "review" }, watch: { prompt: "look" } }));
+    expect(list).toEqual([
+      { name: "queue", prompt: "/review-queue https://example.test/q", category: "review", cwd: undefined },
+      { name: "watch", prompt: "look", category: undefined, cwd: undefined },
+    ]);
+  });
+
+  test("a bad config says what is wrong", () => {
+    expect(() => standing.parseConfig("nope")).toThrow("not valid JSON");
+    expect(() => standing.parseConfig("[]")).toThrow("keyed by session name");
+    expect(() => standing.parseConfig(JSON.stringify({ q: {} }))).toThrow("needs a prompt");
+    expect(() => standing.parseConfig(JSON.stringify({ q: { prompt: "x", category: "urgent" } }))).toThrow("category");
+    expect(() => standing.parseConfig(JSON.stringify({ "a b": { prompt: "x" } }))).toThrow("usable name");
+  });
+
+  test("a missing file points at where to create it", () => {
+    expect(() => standing.loadConfig(join(dir, "absent.json"))).toThrow("absent.json");
+  });
+
+  test("a window is found by its mark, so renaming it does not lose it", () => {
+    const found = standing.find("queue", [pane("%1", "pr-queue", "queue"), pane("%2", "other", "watch")], new Set(["%1"]));
+    expect(found).toEqual({ kind: "live", pane: "%1" });
+  });
+
+  test("a restored window without a mark is found by its name", () => {
+    expect(standing.find("queue", [pane("%1", "queue", "", "zsh")], new Set(["%1"]))).toEqual({ kind: "live", pane: "%1" });
+  });
+
+  test("a window left at a shell with no agent is dead; one still running something is live", () => {
+    expect(standing.find("queue", [pane("%1", "queue", "queue", "zsh")], new Set())).toEqual({ kind: "dead", pane: "%1" });
+    expect(standing.find("queue", [pane("%1", "queue", "queue", "node")], new Set())).toEqual({ kind: "live", pane: "%1" });
+  });
+
+  test("another standing session's window never matches", () => {
+    expect(standing.find("queue", [pane("%2", "queue", "watch")], new Set(["%2"]))).toEqual({ kind: "none" });
+    expect(standing.find("queue", [], new Set())).toEqual({ kind: "none" });
   });
 });
